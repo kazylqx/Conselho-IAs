@@ -1,0 +1,14 @@
+node_modules/
+dist/
+
+# Variaveis de ambiente: NUNCA versionar (as chaves de IA moram aqui).
+.env
+.env.*
+!.env.example
+
+# Historico de debates gerado em runtime
+backend/data/
+
+*.log
+.DS_Store
+Thumbs.db

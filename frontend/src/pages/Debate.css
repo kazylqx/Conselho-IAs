@@ -1,0 +1,121 @@
+.debate {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.debate__header {
+  padding: 1.1rem 1.25rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10, 12, 17, 0.75);
+  backdrop-filter: blur(10px);
+}
+
+.debate__question-row {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.debate__question-block {
+  flex: 1;
+  min-width: 240px;
+}
+
+.debate__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.debate__question {
+  margin: 0.2rem 0 0.5rem;
+  font-size: clamp(1.05rem, 2.4vw, 1.35rem);
+  line-height: 1.35;
+}
+
+.debate__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+}
+
+.debate__confidence {
+  width: 250px;
+  flex: 0 0 auto;
+}
+
+.debate__participants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  max-width: 900px;
+  margin: 0.85rem auto 0;
+  width: 100%;
+  padding-top: 0.7rem;
+  border-top: 1px dashed var(--border);
+}
+
+.debate__participant {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.debate__footer {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  padding: 0.9rem 1rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.debate__footer .button {
+  text-decoration: none;
+}
+
+.debate__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.debate__empty-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 0.6rem;
+}
+
+.debate__empty-actions .button {
+  text-decoration: none;
+}
+
+@media (max-width: 700px) {
+  .debate__header {
+    padding: 0.9rem 1rem 0.8rem;
+  }
+
+  .debate__confidence {
+    width: 100%;
+  }
+}

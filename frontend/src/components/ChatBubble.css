@@ -1,0 +1,146 @@
+.bubble {
+  display: flex;
+  gap: 0.75rem;
+  animation: fade-up 0.28s ease both;
+}
+
+.bubble__body {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--agent-color);
+  border-radius: var(--radius);
+  padding: 0.8rem 1rem 0.65rem;
+  box-shadow: var(--shadow-soft);
+}
+
+.bubble__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.bubble__name {
+  font-weight: 650;
+  color: var(--agent-color);
+  font-size: 0.95rem;
+}
+
+.bubble__role {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+
+.bubble__position {
+  font-size: 0.72rem;
+  font-weight: 650;
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+}
+
+.bubble__position--keep {
+  color: var(--success);
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.bubble__position--revise {
+  color: var(--warn);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.bubble__time {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.bubble__content {
+  font-size: 0.94rem;
+  color: var(--text);
+}
+
+.bubble__content--error {
+  color: #fdd5dc;
+  font-size: 0.9rem;
+}
+
+.bubble__content--error details {
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+}
+
+.bubble__content--error summary {
+  cursor: pointer;
+  color: var(--text-faint);
+}
+
+.bubble__section {
+  margin-bottom: 0.7rem;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--border);
+}
+
+.bubble__section:last-child {
+  margin-bottom: 0;
+}
+
+.bubble__section h4 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: 0.25rem;
+}
+
+.bubble__section--agree {
+  border-left-color: rgba(74, 222, 128, 0.5);
+}
+
+.bubble__section--agree h4 {
+  color: var(--success);
+}
+
+.bubble__section--disagree {
+  border-left-color: rgba(251, 191, 36, 0.5);
+}
+
+.bubble__section--disagree h4 {
+  color: var(--warn);
+}
+
+.bubble__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.55rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--border);
+  font-size: 0.74rem;
+  color: var(--text-faint);
+}
+
+.bubble--error .bubble__body {
+  background: rgba(251, 113, 133, 0.06);
+  border-color: rgba(251, 113, 133, 0.25);
+  border-left-color: var(--danger);
+}
+
+@media (max-width: 600px) {
+  .bubble__body {
+    padding: 0.7rem 0.8rem 0.55rem;
+  }
+
+  .bubble__content {
+    font-size: 0.9rem;
+  }
+}

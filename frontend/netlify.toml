@@ -1,0 +1,35 @@
+#  Configuracao de deploy na Netlify
+#
+#  IMPORTANTE: no painel da Netlify, defina "Base directory" = frontend
+#  (este arquivo mora dentro de /frontend, entao os caminhos abaixo sao
+#  relativos a essa pasta).
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # A URL do backend deve ser configurada como variavel de ambiente no painel
+  # da Netlify: VITE_BACKEND_URL = https://seu-app.squareweb.app
+
+# SPA: qualquer rota cai no index.html para o React Router assumir.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Cabecalhos basicos de seguranca.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+# Assets com hash no nome podem ser cacheados agressivamente.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

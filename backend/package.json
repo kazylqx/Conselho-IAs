@@ -1,0 +1,23 @@
+{
+  "name": "conselho-de-ias-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend do Conselho de IAs: orquestra debates entre multiplas IAs via REST + Socket.IO",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "debate:teste": "node scripts/smoke-debate.js",
+    "providers:check": "node scripts/check-providers.js"
+  },
+  "dependencies": {
+    "cors": "2.8.5",
+    "dotenv": "16.4.7",
+    "express": "4.21.2",
+    "socket.io": "4.8.1"
+  }
+}

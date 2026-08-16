@@ -1,0 +1,25 @@
+.agent-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  /* Fallback primeiro, color-mix depois (navegadores antigos ignoram a 2a linha) */
+  background: var(--bg-elev-2);
+  background: color-mix(in srgb, var(--avatar-color) 20%, var(--bg-elev-2));
+  border: 1.5px solid var(--border-strong);
+  border-color: color-mix(in srgb, var(--avatar-color) 55%, transparent);
+  color: var(--avatar-color);
+  line-height: 1;
+  user-select: none;
+}
+
+.agent-avatar--typing {
+  animation: pulse-ring 1.6s ease-out infinite;
+  border-color: var(--avatar-color);
+}
+
+.agent-avatar--failed {
+  filter: grayscale(0.85);
+  opacity: 0.55;
+}

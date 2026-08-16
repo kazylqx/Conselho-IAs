@@ -1,0 +1,14 @@
+node_modules/
+
+# Variaveis de ambiente: NUNCA versionar.
+# GROQ_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY ficam somente aqui (local)
+# ou no painel de variaveis da SquareCloud (producao).
+.env
+.env.*
+!.env.example
+
+# Historico de debates (gerado em runtime)
+data/
+
+*.log
+.DS_Store
