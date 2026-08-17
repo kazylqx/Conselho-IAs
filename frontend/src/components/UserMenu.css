@@ -1,0 +1,97 @@
+.usermenu {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--ink-800);
+  color: inherit;
+  min-width: 0;
+}
+
+.usermenu--carregando {
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--paper-faint);
+  border-style: dashed;
+}
+
+.usermenu--convite {
+  text-decoration: none;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.usermenu--convite:hover {
+  border-color: var(--brass-line);
+  background: var(--brass-soft);
+  color: inherit;
+}
+
+.usermenu__avatar {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-full);
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--brass), var(--brass-deep));
+  color: #1a1205;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.usermenu__avatar--vazio {
+  background: var(--ink-600);
+  color: var(--brass);
+  border: 1px dashed var(--brass-line);
+  font-size: var(--text-sm);
+}
+
+.usermenu__texto {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.usermenu__texto strong {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usermenu__texto small {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--paper-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usermenu__sair {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--paper-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-wide);
+  cursor: pointer;
+  padding: 0.2rem 0.35rem;
+  border-radius: var(--r-xs);
+}
+
+.usermenu__sair:hover {
+  color: var(--clay);
+  background: var(--clay-soft);
+}

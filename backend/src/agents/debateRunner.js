@@ -31,9 +31,11 @@ export function contarDebatesEmAndamento() {
  * @param {string} params.question
  * @param {import('socket.io').Server} params.io
  * @param {object} params.db
+ * @param {{uid: string, email: string|null}|null} [params.owner]
+ *        usuario autenticado, quando o login esta ativo
  * @returns {Promise<object>} registro do debate recem-criado
  */
-export async function startDebate({ question, io, db }) {
+export async function startDebate({ question, io, db, owner = null }) {
   const limite = Number.parseInt(process.env.MAX_CONCURRENT_DEBATES ?? '3', 10) || 3;
   if (emAndamento.size >= limite) {
     throw tooManyRequests(
@@ -48,6 +50,7 @@ export async function startDebate({ question, io, db }) {
     agents: agentesPublicos,
     judge: toPublicAgent(judgeConfig),
     mock: isMockMode(),
+    owner,
   });
 
   emAndamento.add(debate.id);

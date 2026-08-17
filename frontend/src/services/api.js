@@ -6,6 +6,8 @@
  * VITE_BACKEND_URL (definida no .env local ou no painel da Netlify).
  */
 
+import { obterIdToken } from './firebase.js';
+
 /** URL base do backend, sem barra no final. */
 export const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000').replace(
   /\/+$/,
@@ -35,6 +37,11 @@ async function request(path, options = {}) {
   if (options.body) headers['Content-Type'] = 'application/json';
   if (apiToken) headers['x-api-token'] = apiToken;
 
+  // Identidade do Firebase: o backend usa para amarrar o debate ao usuário e
+  // barrar leitura de debate de outra conta.
+  const idToken = await obterIdToken();
+  if (idToken) headers.Authorization = `Bearer ${idToken}`;
+
   let response;
   try {
     response = await fetch(`${backendUrl}/api${path}`, { ...options, headers });
@@ -61,6 +68,11 @@ async function request(path, options = {}) {
   }
 
   return dados;
+}
+
+/** Estado de login exigido pelo backend (usado para decidir a UI). */
+export async function estadoDoBackend() {
+  return request('/health');
 }
 
 export const api = {

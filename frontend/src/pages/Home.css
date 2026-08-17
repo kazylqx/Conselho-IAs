@@ -95,6 +95,87 @@
   max-width: 720px;
 }
 
+/* Placeholder enquanto o Firebase confere a sessão (evita piscar de conteúdo) */
+.hero__aguarde {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 118px;
+  padding: var(--space-5);
+  border-radius: var(--r-lg);
+  border: 1px dashed var(--line-strong);
+  background: var(--ink-800);
+  color: var(--paper-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-wide);
+}
+
+.hero__aguarde-dots {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.hero__aguarde-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--brass);
+  animation: dot-pulse 1.2s var(--ease-out) infinite;
+}
+
+.hero__aguarde-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.hero__aguarde-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Convite de login no lugar do campo de pergunta */
+.hero__gate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding: var(--space-5);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(520px 180px at 10% 0%, rgba(224, 165, 74, 0.12), transparent 70%),
+    linear-gradient(180deg, var(--ink-700), var(--ink-800));
+  border: 1px solid var(--brass-line);
+  box-shadow: var(--shadow-md);
+}
+
+.hero__gate-title {
+  font-size: var(--text-xl);
+  margin: var(--space-2) 0 var(--space-2);
+}
+
+.hero__gate-text {
+  margin: 0;
+  max-width: 46ch;
+  font-size: var(--text-sm);
+}
+
+.hero__gate-actions .button {
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .hero__gate {
+    padding: var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .hero__gate-actions,
+  .hero__gate-actions .button {
+    width: 100%;
+  }
+}
+
 /* -------------------------------------------------------- últimos debates */
 
 .recent {

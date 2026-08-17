@@ -13,7 +13,9 @@ import { AgentEnsemble } from '../components/AgentEnsemble.jsx';
 import { RoundsTimeline } from '../components/RoundsTimeline.jsx';
 import { useBackendStatus } from '../hooks/useBackendStatus.js';
 import { useDebateHistory } from '../hooks/useDebateHistory.js';
+import { useAuth } from '../contexts/AuthProvider.jsx';
 import { api } from '../services/api.js';
+import { salvarResumo } from '../services/userHistory.js';
 import { tempoRelativo } from '../utils/time.js';
 import { resumir } from '../utils/format.jsx';
 import './Home.css';
@@ -22,8 +24,14 @@ export default function Home() {
   const navigate = useNavigate();
   const backend = useBackendStatus();
   const { debates } = useDebateHistory(3);
+  const { usuario, autenticado, habilitado, carregando: verificandoSessao } = useAuth();
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState(null);
+
+  /** Com login ativo, perguntar exige conta (é o que separa os históricos). */
+  const precisaEntrar = habilitado && !verificandoSessao && !autenticado;
+  /** Enquanto o Firebase confere a sessão, não decidimos ainda o que mostrar. */
+  const aguardandoSessao = habilitado && verificandoSessao;
 
   async function iniciarDebate(pergunta) {
     setEnviando(true);
@@ -31,6 +39,23 @@ export default function Home() {
 
     try {
       const debate = await api.startDebate(pergunta);
+
+      // Registra na conta do usuário antes de sair da tela: assim o debate
+      // aparece no histórico mesmo que ele feche a aba no meio.
+      if (usuario?.uid) {
+        await salvarResumo(usuario.uid, {
+          id: debate.id,
+          question: debate.question,
+          status: 'running',
+          createdAt: Date.now(),
+          mock: Boolean(debate.mock),
+          agentCount: debate.agents?.length ?? 0,
+          confidence: null,
+          preview: null,
+          completedAt: null,
+        }).catch((falha) => console.warn('[firestore] não salvei o resumo:', falha.message));
+      }
+
       navigate(`/debate/${debate.id}`);
     } catch (error) {
       setErro(error.message);
@@ -60,7 +85,34 @@ export default function Home() {
           </p>
 
           <div className="hero__composer">
-            <QuestionComposer onSubmit={iniciarDebate} loading={enviando} error={erro} />
+            {aguardandoSessao ? (
+              <div className="hero__aguarde" role="status">
+                <span className="hero__aguarde-dots" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                verificando sua sessão…
+              </div>
+            ) : precisaEntrar ? (
+              <div className="hero__gate">
+                <div>
+                  <span className="eyebrow eyebrow--brass">antes de começar</span>
+                  <h2 className="hero__gate-title">Entre para convocar o conselho</h2>
+                  <p className="muted hero__gate-text">
+                    Cada conta tem seu próprio histórico: seus debates ficam salvos com
+                    transcrição, fontes e veredito, e só você vê.
+                  </p>
+                </div>
+                <div className="hero__gate-actions">
+                  <Link to="/login" className="button button--primary">
+                    Entrar ou criar conta
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <QuestionComposer onSubmit={iniciarDebate} loading={enviando} error={erro} />
+            )}
           </div>
 
           {!backend.loading && !backend.online && (

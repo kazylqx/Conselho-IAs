@@ -8,6 +8,8 @@
  *  2. os eventos ao vivo, um por um, conforme os agentes respondem.
  */
 
+import { isAuthConfigured, verifyIdToken } from '../auth/firebase.js';
+
 /** Eventos que NAO vao para o historico (sao apenas visuais e efemeros). */
 const EVENTOS_EFEMEROS = new Set(['agent_typing']);
 
@@ -34,6 +36,20 @@ export function initSockets(io, db) {
     return next(new Error('Token de API inválido ou ausente.'));
   });
 
+  // Identifica o usuário do Firebase, quando ele mandar o ID token no handshake.
+  // Não barra quem não mandou: a checagem de dono acontece no join_debate.
+  io.use(async (socket, next) => {
+    const idToken = socket.handshake.auth?.firebaseToken;
+    if (!isAuthConfigured() || !idToken) return next();
+
+    try {
+      socket.data.user = await verifyIdToken(idToken);
+    } catch (erro) {
+      console.warn(`[socket] token do Firebase recusado: ${erro.message}`);
+    }
+    return next();
+  });
+
   io.on('connection', (socket) => {
     console.log(`[socket] conectado: ${socket.id}`);
 
@@ -54,6 +70,14 @@ export function initSockets(io, db) {
         if (!debate) {
           socket.emit('debate_not_found', { debateId });
           if (typeof ack === 'function') ack({ ok: false, error: 'debate não encontrado' });
+          return;
+        }
+
+        // Debate com dono só vai ao ar para o dono.
+        if (debate.ownerUid && debate.ownerUid !== socket.data.user?.uid) {
+          socket.leave(roomName(debateId));
+          socket.emit('debate_forbidden', { debateId });
+          if (typeof ack === 'function') ack({ ok: false, error: 'debate de outra conta' });
           return;
         }
 

@@ -1,23 +1,28 @@
 /**
  * ============================================================================
- *  useDebateHistory — lista de conversas + exclusao com "desfazer"
+ *  useDebateHistory — historico do usuario logado
  * ============================================================================
- * A exclusao eh otimista e adiada: o item sai da lista na hora, um aviso com
- * "Desfazer" aparece por alguns segundos e SO DEPOIS o DELETE vai para o backend.
- * Assim o desfazer eh real (nada foi apagado ainda) em vez de teatro.
+ * Com Firebase configurado, a lista vem do Firestore em tempo real
+ * (users/{uid}/debates) — debate novo aparece sem recarregar e cada pessoa ve
+ * apenas o que e seu.
  *
- * Sidebar e pagina de historico sao instancias diferentes deste hook, entao
- * avisamos uma a outra por um evento de janela — mais simples que montar um
- * store global para duas telas.
+ * Sem Firebase, cai para o histórico do backend (modo anônimo), para o projeto
+ * continuar rodando localmente sem depender de nuvem.
+ *
+ * A exclusao eh otimista e adiada: o item sai da lista na hora, o aviso com
+ * "Desfazer" aparece por alguns segundos e SO DEPOIS o apagamento acontece de
+ * verdade (Firestore + backend). Assim o desfazer eh real, nao teatro.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../services/api.js';
+import { apagarResumo, assinarHistorico } from '../services/userHistory.js';
+import { useAuth } from '../contexts/AuthProvider.jsx';
 
 /** Tempo que o usuário tem para desfazer a exclusão. */
 export const JANELA_DESFAZER_MS = 6000;
 
-/** Evento interno: "o histórico mudou, recarreguem". */
+/** Evento interno: "o histórico mudou, recarreguem" (usado no modo anônimo). */
 const EVENTO_MUDANCA = 'conselho:historico-mudou';
 
 export function avisarMudancaNoHistorico() {
@@ -28,6 +33,9 @@ export function avisarMudancaNoHistorico() {
  * @param {number} [limit] quantos debates trazer
  */
 export function useDebateHistory(limit = 20) {
+  const { usuario, habilitado, carregando: carregandoLogin } = useAuth();
+  const uid = usuario?.uid ?? null;
+
   const [debates, setDebates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -37,47 +45,99 @@ export function useDebateHistory(limit = 20) {
   /** id -> { timer, debate } */
   const pendentes = useRef(new Map());
 
-  const refresh = useCallback(async () => {
+  /** Remove da lista o que está em processo de exclusão. */
+  const semPendentes = useCallback(
+    (lista) => lista.filter((item) => !pendentes.current.has(item.id)),
+    [],
+  );
+
+  // ---------------------------------------------------------------- Firestore
+  useEffect(() => {
+    if (!habilitado) return undefined;
+
+    if (carregandoLogin) {
+      setLoading(true);
+      return undefined;
+    }
+
+    if (!uid) {
+      // Sem login: nada para mostrar (a tela pede para entrar).
+      setDebates([]);
+      setLoading(false);
+      return undefined;
+    }
+
+    setLoading(true);
+
+    const cancelar = assinarHistorico(
+      uid,
+      (lista) => {
+        setDebates(semPendentes(lista.slice(0, limit)));
+        setError(null);
+        setLoading(false);
+      },
+      (erro) => {
+        setError(
+          erro.code === 'permission-denied'
+            ? 'Sem permissão para ler o histórico. Publique as regras do Firestore (firestore.rules).'
+            : `Não consegui carregar seu histórico: ${erro.message}`,
+        );
+        setLoading(false);
+      },
+      Math.max(limit, 20),
+    );
+
+    return cancelar;
+  }, [habilitado, carregandoLogin, uid, limit, semPendentes]);
+
+  // ------------------------------------------------- modo anônimo (sem Firebase)
+  const recarregarDoBackend = useCallback(async () => {
     try {
       const dados = await api.history(limit);
-      const emExclusao = pendentes.current;
-      // Não traz de volta o que o usuário acabou de excluir.
-      setDebates((dados.debates ?? []).filter((debate) => !emExclusao.has(debate.id)));
+      setDebates(semPendentes(dados.debates ?? []));
       setError(null);
     } catch (erro) {
       setError(erro.message);
     } finally {
       setLoading(false);
     }
-  }, [limit]);
+  }, [limit, semPendentes]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (habilitado) return undefined;
+    recarregarDoBackend();
 
-  // Recarrega quando outra tela mexe no histórico.
-  useEffect(() => {
-    const aoMudar = () => refresh();
+    const aoMudar = () => recarregarDoBackend();
     window.addEventListener(EVENTO_MUDANCA, aoMudar);
     return () => window.removeEventListener(EVENTO_MUDANCA, aoMudar);
-  }, [refresh]);
+  }, [habilitado, recarregarDoBackend]);
 
-  /** Confirma a exclusão no backend (fim da janela de desfazer). */
-  const confirmarExclusao = useCallback(async (id) => {
-    const registro = pendentes.current.get(id);
-    pendentes.current.delete(id);
-    setPendente((atual) => (atual?.id === id ? null : atual));
+  /** Recarrega manualmente (no Firestore o tempo real já cuida disso). */
+  const refresh = useCallback(() => {
+    if (habilitado) return;
+    recarregarDoBackend();
+  }, [habilitado, recarregarDoBackend]);
 
-    if (!registro) return;
+  /** Apaga de verdade: fim da janela de desfazer. */
+  const confirmarExclusao = useCallback(
+    async (id) => {
+      const registro = pendentes.current.get(id);
+      pendentes.current.delete(id);
+      setPendente((atual) => (atual?.id === id ? null : atual));
+      if (!registro) return;
 
-    try {
-      await api.deleteDebate(id);
-      avisarMudancaNoHistorico();
-    } catch (erro) {
-      setError(`Não foi possível excluir: ${erro.message}`);
-      refresh();
-    }
-  }, [refresh]);
+      try {
+        if (uid) await apagarResumo(uid, id);
+        // O backend guarda a transcrição: apagar lá também.
+        await api.deleteDebate(id).catch(() => {});
+        if (!habilitado) avisarMudancaNoHistorico();
+      } catch (erro) {
+        setError(`Não foi possível excluir: ${erro.message}`);
+        refresh();
+      }
+    },
+    [uid, habilitado, refresh],
+  );
 
   /** Remove da lista e abre a janela de desfazer. */
   const remover = useCallback(
@@ -104,6 +164,14 @@ export function useDebateHistory(limit = 20) {
       if (registro) {
         clearTimeout(registro.timer);
         pendentes.current.delete(alvo);
+        // Volta para a lista sem esperar o Firestore reemitir.
+        if (registro.debate?.question) {
+          setDebates((atual) =>
+            [...atual, registro.debate].sort(
+              (a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0),
+            ),
+          );
+        }
       }
 
       setPendente((atual) => (atual?.id === alvo ? null : atual));
@@ -112,17 +180,18 @@ export function useDebateHistory(limit = 20) {
     [pendente, refresh],
   );
 
-  // Se o componente sair da tela com exclusão pendente, cumpre a promessa:
-  // apaga de verdade em vez de deixar o item em limbo.
+  // Se a tela sair com exclusão pendente, cumpre a promessa em vez de deixar
+  // o item em limbo.
   useEffect(
     () => () => {
       for (const [id, registro] of pendentes.current.entries()) {
         clearTimeout(registro.timer);
+        if (uid) apagarResumo(uid, id).catch(() => {});
         api.deleteDebate(id).catch(() => {});
       }
       pendentes.current.clear();
     },
-    [],
+    [uid],
   );
 
   return { debates, loading, error, refresh, remover, desfazer, pendente };

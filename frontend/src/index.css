@@ -474,6 +474,20 @@ button {
   }
 }
 
+/* Pontinhos de espera (usado em estados de carregamento fora do debate) */
+@keyframes dot-pulse {
+  0%,
+  70%,
+  100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
 .anim-rise {
   animation: rise-in var(--dur-slow) var(--ease-out) both;
 }

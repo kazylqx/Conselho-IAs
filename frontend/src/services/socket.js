@@ -8,8 +8,19 @@
 
 import { io } from 'socket.io-client';
 import { apiToken, backendUrl } from './api.js';
+import { obterIdToken } from './firebase.js';
 
 let socket = null;
+/** ID token do Firebase enviado no handshake (atualizado no login/logout). */
+let tokenDeUsuario = null;
+
+/** Monta o objeto `auth` do handshake com o que existir. */
+function credenciais() {
+  const dados = {};
+  if (apiToken) dados.token = apiToken;
+  if (tokenDeUsuario) dados.firebaseToken = tokenDeUsuario;
+  return dados;
+}
 
 /** Retorna (criando na primeira vez) a conexao com o backend. */
 export function getSocket() {
@@ -23,14 +34,36 @@ export function getSocket() {
     reconnectionAttempts: Infinity,
     reconnectionDelay: 800,
     reconnectionDelayMax: 5000,
-    auth: apiToken ? { token: apiToken } : undefined,
+    auth: credenciais(),
   });
 
   socket.on('connect_error', (error) => {
     console.warn('[socket] falha ao conectar:', error.message);
   });
 
+  // Token expira em 1h: renova a credencial em cada reconexão.
+  socket.io.on('reconnect_attempt', async () => {
+    const atual = await obterIdToken();
+    tokenDeUsuario = atual;
+    socket.auth = credenciais();
+  });
+
   return socket;
+}
+
+/**
+ * Reabre a conexao com a identidade nova (chamado no login e no logout).
+ * O backend le o token no handshake, entao trocar de usuario exige reconectar.
+ *
+ * @param {string|null} idToken
+ */
+export function reconectarSocket(idToken) {
+  tokenDeUsuario = idToken ?? null;
+  if (!socket) return;
+
+  socket.auth = credenciais();
+  socket.disconnect();
+  socket.connect();
 }
 
 /**

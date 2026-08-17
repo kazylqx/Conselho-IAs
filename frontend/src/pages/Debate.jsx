@@ -7,11 +7,14 @@
  * controlado pelo DebateRoom (fila de apresentação).
  */
 
+import { useEffect, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { DebateRoom } from '../components/DebateRoom.jsx';
 import { ConfidenceMeter } from '../components/ConfidenceMeter.jsx';
 import { AgentAvatar } from '../components/AgentAvatar.jsx';
 import { useDebateStream } from '../hooks/useDebateStream.js';
+import { useAuth } from '../contexts/AuthProvider.jsx';
+import { salvarResumo } from '../services/userHistory.js';
 import { dataHora } from '../utils/time.js';
 import './Debate.css';
 
@@ -34,6 +37,7 @@ function StatusTag({ status, connected }) {
 
 export default function Debate() {
   const { id } = useParams();
+  const { usuario } = useAuth();
   const {
     loading,
     notFound,
@@ -48,6 +52,35 @@ export default function Debate() {
     verdict,
     status,
   } = useDebateStream(id);
+
+  /**
+   * Sincroniza o resumo com o histórico do usuário (Firestore).
+   * Roda quando o status ou a confiança mudam — inclusive ao reabrir um debate
+   * antigo que ficou marcado como "em andamento" porque a aba foi fechada.
+   */
+  const ultimoResumo = useRef('');
+
+  useEffect(() => {
+    if (!usuario?.uid || !debate?.question) return;
+
+    const assinatura = `${status}|${verdict?.confidence ?? ''}`;
+    if (assinatura === ultimoResumo.current) return;
+    ultimoResumo.current = assinatura;
+
+    salvarResumo(usuario.uid, {
+      id,
+      question: debate.question,
+      status,
+      createdAt: debate.createdAt ? new Date(debate.createdAt).getTime() : Date.now(),
+      completedAt: status === 'running' ? null : Date.now(),
+      confidence: verdict?.confidence ?? null,
+      preview: verdict?.finalAnswer
+        ? String(verdict.finalAnswer).replace(/[*`#>]/g, '').replace(/\s+/g, ' ').slice(0, 180)
+        : null,
+      mock: Boolean(debate.mock),
+      agentCount: debate.agents?.length ?? 0,
+    }).catch((falha) => console.warn('[firestore] não atualizei o resumo:', falha.message));
+  }, [usuario?.uid, id, debate, status, verdict]);
 
   if (notFound) {
     return (

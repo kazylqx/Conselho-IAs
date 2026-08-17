@@ -14,6 +14,9 @@ O debate acontece em três rodadas:
 Tudo é transmitido mensagem por mensagem pelo Socket.IO, com indicador de "digitando…" por
 agente, barra de confiança animada e histórico persistido para revisitar debates antigos.
 
+Com login pelo Firebase (Google ou e-mail/senha), **cada pessoa tem seu próprio arquivo de
+debates** — ver [Login e histórico por usuário](#login-e-histórico-por-usuário-firebase).
+
 ---
 
 ## Stack
@@ -22,7 +25,8 @@ agente, barra de confiança animada e histórico persistido para revisitar debat
 | ------ | ---------- | ------ |
 | Backend | Node.js + Express + Socket.IO (ESM, sem SDKs de IA — só `fetch`) | SquareCloud |
 | Frontend | React 18 + Vite + React Router + socket.io-client | Netlify |
-| Persistência | Arquivo JSON local (`backend/data/debates.json`) | — |
+| Login | Firebase Authentication (Google + e-mail/senha) | — |
+| Persistência | Firestore (resumo por usuário) + arquivo JSON no backend (transcrição) | — |
 | IAs | Groq + Google Gemini + OpenRouter (todas com camada gratuita) | — |
 
 Dependências do backend: `express`, `cors`, `socket.io`, `dotenv`. Nada nativo, nada pago.
@@ -48,8 +52,10 @@ instalar, atualizar e quebrar no deploy.
       orchestrator.js     # as 3 rodadas + tolerância a falhas
       debateRunner.js     # cria o debate e roda em segundo plano
       webSearch.js        # busca na web via Tavily (+ heurística de "precisa de dado atual?")
+    /auth
+      firebase.js         # valida o ID token do Firebase via REST (accounts:lookup) + cache
     /routes
-      index.js            # /api/health, /api/agents
+      index.js            # /api/health, /api/agents, /api/me
       debate.routes.js    # POST /debate, GET /debate/:id, DELETE /debate/:id, GET /history
     /sockets
       index.js            # salas por debate, snapshot ao entrar, emissor de eventos
@@ -57,7 +63,7 @@ instalar, atualizar e quebrar no deploy.
       index.js            # persistência JSON (escrita atômica + poda do histórico)
     /utils
       httpError.js
-      middleware.js       # token opcional, rate limit, handler de erros
+      middleware.js       # login opcional/obrigatório, token, rate limit, handler de erros
     agents.config.js      # ⭐ o único arquivo que você precisa editar para mudar o conselho
     server.js
   squarecloud.config
@@ -66,11 +72,15 @@ instalar, atualizar e quebrar no deploy.
 
 /frontend
   /src
-    /components           # ChatBubble, ConfidenceBar, AgentAvatar, DebateRoom, TypingIndicator,
-                          # FinalVerdict, RoundDivider, Sidebar, QuestionForm, AgentRoster
-    /pages                # Home, Debate, History
-    /services             # api.js (REST) e socket.js (WebSocket)
-    /hooks                # useDebateStream, useDebateHistory, useBackendStatus
+    /components           # ChatBubble, ConfidenceMeter, AgentAvatar, DebateRoom, TypingIndicator,
+                          # FinalVerdict, RoundDivider, Sidebar, QuestionComposer, AgentEnsemble,
+                          # UserMenu, AuthGate, UndoToast, DebateSkeleton
+    /contexts             # AuthProvider (quem está logado)
+    /pages                # Home, Debate, History, Login
+    /services             # api.js (REST), socket.js (WebSocket), firebase.js, auth.js,
+                          # userHistory.js (Firestore)
+    /hooks                # useDebateStream, useDebateHistory, useBackendStatus, useSequentialReveal
+    /styles               # tokens.css (design system)
     /utils                # format.jsx (mini markdown), time.js
     App.jsx
     main.jsx
@@ -78,6 +88,8 @@ instalar, atualizar e quebrar no deploy.
   netlify.toml
   .env.example
   package.json
+
+firestore.rules           # regras do Firestore: cada um lê e escreve só o próprio histórico
 ```
 
 ---
@@ -118,6 +130,10 @@ O `.env` do frontend só precisa de:
 ```
 VITE_BACKEND_URL=http://localhost:3000
 ```
+
+As variáveis `VITE_FIREBASE_*` são opcionais no local: sem elas o site roda em modo anônimo (sem
+tela de login, histórico vindo do backend). Para testar o login por usuário, preencha-as e veja
+[Login e histórico por usuário](#login-e-histórico-por-usuário-firebase).
 
 ### 3. Conferir as chaves e testar o debate pelo terminal
 
@@ -416,12 +432,19 @@ Outros ajustes em `debateSettings`, no mesmo arquivo:
 
 | Método | Rota | O que faz |
 | ------ | ---- | --------- |
-| `GET` | `/api/health` | status, modo simulado, se a busca web está ligada |
-| `GET` | `/api/agents` | conselho configurado (sem nada sensível) |
-| `POST` | `/api/debate` | `{ "question": "..." }` → cria o debate e responde na hora com o `id` |
-| `GET` | `/api/debate/:id` | debate completo, com todos os eventos (permite reconstruir a tela) |
-| `DELETE` | `/api/debate/:id` | apaga do histórico |
-| `GET` | `/api/history?limit=50` | resumos dos debates anteriores |
+| Método | Rota | O que faz | Login |
+| ------ | ---- | --------- | ----- |
+| `GET` | `/api/health` | status, modo simulado, busca web, `authEnabled`/`authRequired` | aberto |
+| `GET` | `/api/agents` | conselho configurado (sem nada sensível) | aberto |
+| `GET` | `/api/me` | quem é o portador do token (`uid`, e-mail, nome) | exige¹ |
+| `POST` | `/api/debate` | `{ "question": "..." }` → cria o debate e responde na hora com o `id` | exige¹ (401 sem token) |
+| `GET` | `/api/debate/:id` | debate completo, com todos os eventos (permite reconstruir a tela) | só o dono¹ (403) |
+| `DELETE` | `/api/debate/:id` | apaga do histórico | só o dono¹ (403) |
+| `GET` | `/api/history?limit=50` | resumos **dos seus** debates (lista vazia se você não estiver logado) | filtra por dono¹ |
+
+¹ Vale apenas quando o login está ativo (`FIREBASE_WEB_API_KEY` presente e `REQUIRE_AUTH` diferente
+de `false`). Sem isso o backend segue aberto, como antes. O token vai no cabeçalho
+`Authorization: Bearer <idToken do Firebase>`; no WebSocket, em `auth.firebaseToken`.
 
 ### Eventos do WebSocket
 
@@ -437,6 +460,83 @@ publishedAt }] }` — `agentId: null` significa a busca compartilhada da rodada 
 
 Todo evento persistido tem um `seq` incremental — é isso que permite recarregar a página no meio
 do debate sem duplicar mensagens.
+
+---
+
+## Login e histórico por usuário (Firebase)
+
+Cada pessoa tem seu próprio arquivo de debates. Usa **Firebase Authentication** (Google +
+e-mail/senha) e **Firestore** — os dois no plano gratuito. Storage não é usado (nada de arquivos).
+
+### Como está dividido
+
+| Onde | Guarda o quê |
+| ---- | ------------ |
+| Firestore `users/{uid}/debates/{id}` | **resumo**: pergunta, status, confiança final, início da resposta, datas |
+| Backend (memória/JSON) | **transcrição completa**: todos os eventos, com `ownerUid` de quem pediu |
+
+O frontend escreve o resumo (2 escritas por debate: ao criar e ao terminar) e o backend continua
+a fonte da verdade da transcrição. Isso mantém o Firestore dentro da cota gratuita e evita
+precisar de service account no servidor.
+
+**Validação do token no backend sem `firebase-admin`:** `backend/src/auth/firebase.js` chama o
+endpoint REST `accounts:lookup` do Identity Toolkit com a chave web e guarda o resultado em cache
+por 5 minutos. Sem SDK pesado, sem chave privada de serviço no repositório.
+
+Rotas HTTP recebem o token em `Authorization: Bearer …`; o WebSocket recebe em
+`auth.firebaseToken` no handshake. Quem pede um debate que não é seu leva `403` (ou
+`debate_forbidden` no socket). Debates antigos, criados antes do login existir, não têm `ownerUid`
+e continuam visíveis para não sumir com o histórico legado.
+
+### Passo a passo no Firebase Console
+
+1. Crie (ou abra) o projeto em <https://console.firebase.google.com>.
+2. **Authentication → Sign-in method**: habilite **Google** e **E-mail/senha**.
+   Sem isso o login falha com `auth/operation-not-allowed`.
+3. **Authentication → Settings → Authorized domains**: adicione o domínio da Netlify
+   (ex.: `conselho-de-ias.netlify.app`). `localhost` já vem liberado.
+4. **Firestore Database → Criar banco de dados** → modo produção, região mais próxima.
+5. **Firestore → Regras**: publique o conteúdo de [`firestore.rules`](./firestore.rules).
+   Ele restringe leitura e escrita ao próprio `uid` e valida os campos aceitos.
+   Sem publicar, o histórico aparece vazio e o console mostra `permission-denied`.
+6. **Configurações do projeto → Seus apps → Web**: copie a config para as variáveis abaixo.
+
+### Variáveis
+
+Frontend (`frontend/.env` no local, painel da Netlify em produção):
+
+```env
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=seu-projeto.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=seu-projeto
+VITE_FIREBASE_STORAGE_BUCKET=seu-projeto.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+```
+
+Backend (`backend/.env` no local, painel da SquareCloud em produção):
+
+```env
+FIREBASE_WEB_API_KEY=      # a mesma chave web do frontend
+FIREBASE_PROJECT_ID=       # o mesmo projectId
+REQUIRE_AUTH=true          # false deixa o backend aberto (útil para testar)
+```
+
+A chave web **não é segredo**: ela identifica o projeto e é feita para ficar no navegador. Quem
+protege os dados são as regras do Firestore e a lista de domínios autorizados.
+
+### Degradação: sem Firebase o projeto continua rodando
+
+Se as variáveis `VITE_FIREBASE_*` estiverem vazias, o frontend entra em modo anônimo: sem tela de
+login, sem menu de conta, e o histórico vem do backend como antes. Do lado do servidor, sem
+`FIREBASE_WEB_API_KEY` as rotas ficam abertas mesmo com `REQUIRE_AUTH=true` (é registrado um aviso
+no log). Ninguém fica com tela branca por falta de configuração.
+
+### Peso no navegador
+
+O SDK do Firestore entra por `import()` dinâmico (`services/firebase.js` → `carregarFirestore()`),
+então só é baixado por quem abre o histórico. O carregamento inicial fica com React (chunk
+separado, cacheável) + app + Firebase Auth.
 
 ---
 
@@ -497,9 +597,17 @@ Configure no painel do app — **as chaves ficam aqui, nunca no código nem no r
    FRONTEND_URL=https://seu-site.netlify.app
    PORT=80
    MOCK_AI=false
+
+   # login (ver a seção "Login e histórico por usuário")
+   FIREBASE_WEB_API_KEY=...
+   FIREBASE_PROJECT_ID=...
+   REQUIRE_AUTH=true
    ```
 
    > **`PORT=80` é obrigatório**: o balanceador da SquareCloud roteia o tráfego web pela porta 80.
+
+   > Enquanto as variáveis do Firebase não estiverem no painel, o backend em produção segue
+   > **aberto** (aceita pedidos sem login), mesmo com o frontend já pedindo conta.
 
 Depois confira `https://<subdominio>.squareweb.app/api/health` (deve trazer `mockMode: false` e
 `webSearchImplemented: true`).
@@ -522,9 +630,19 @@ baixe o arquivo pelo painel se quiser guardar.
 
    ```
    VITE_BACKEND_URL=https://<subdominio>.squareweb.app
+
+   VITE_FIREBASE_API_KEY=...
+   VITE_FIREBASE_AUTH_DOMAIN=seu-projeto.firebaseapp.com
+   VITE_FIREBASE_PROJECT_ID=seu-projeto
+   VITE_FIREBASE_STORAGE_BUCKET=seu-projeto.firebasestorage.app
+   VITE_FIREBASE_MESSAGING_SENDER_ID=...
+   VITE_FIREBASE_APP_ID=...
    ```
 
-   (sem barra no final). Se você usar o token opcional, adicione também `VITE_API_TOKEN`.
+   (URL sem barra no final). Se você usar o token opcional, adicione também `VITE_API_TOKEN`.
+   Variáveis novas só valem no **próximo build** — use *Deploys → Trigger deploy* depois de
+   adicioná-las. E não esqueça de liberar o domínio da Netlify em *Authentication → Settings →
+   Authorized domains* no Firebase, senão o login com Google é bloqueado.
 
 3. Faça o deploy. O `netlify.toml` já cuida do redirect de SPA (`/*` → `/index.html`), então
    rotas como `/debate/<id>` funcionam ao recarregar a página.
@@ -680,3 +798,18 @@ sem quebrar.
 - Parser da rodada 2 contra os formatos que os modelos realmente usam: rótulos em negrito sem
   dois-pontos, cabeçalhos `###`, eco das instruções dentro da resposta, posição escrita só no meio
   do parágrafo e texto sem rótulo algum.
+
+### Login e histórico por usuário (16/08/2026)
+
+- Backend com `REQUIRE_AUTH=true` e a chave web do projeto `conselhoia`:
+  `GET /api/health` reportando `authEnabled: true` e `authRequired: true`;
+  `POST /api/debate` sem token → **401**; `GET /api/me` com token inválido → **401**;
+  `GET /api/history` sem token → `{ total: 0, debates: [] }` (lista vazia, sem erro na tela).
+- Build do frontend com o Firebase configurado: React em chunk próprio (54 kB gzip),
+  aplicação 66 kB gzip, e o **Firestore em chunk separado de 107 kB gzip que só baixa quando o
+  histórico é aberto** (o `index.html` gerado não faz preload dele).
+- Renderização das rotas `/`, `/login`, `/history`, `/debate/:id` e rota inexistente fora do
+  navegador (teste de fumaça com `renderToString`), para pegar import quebrado ou contexto ausente.
+- O que **não** foi testado por aqui: o login de verdade (popup do Google e criação de conta por
+  e-mail/senha) e a leitura do Firestore com as regras publicadas — isso depende de habilitar os
+  provedores e publicar as regras no console do Firebase.

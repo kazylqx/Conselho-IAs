@@ -15,5 +15,24 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        /**
+         * Separa React em um chunk proprio: ele quase nunca muda, entao o
+         * navegador reaproveita o cache entre deploys. O Firebase fica de fora
+         * desta regra de proposito — o Firestore entra por import dinamico
+         * (services/firebase.js) e deve continuar em um chunk separado, longe
+         * do carregamento inicial.
+         */
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('firebase')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) {
+            return 'vendor-react';
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });

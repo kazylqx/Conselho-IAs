@@ -10,6 +10,8 @@ import { useEffect } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useDebateHistory } from '../hooks/useDebateHistory.js';
 import { useBackendStatus } from '../hooks/useBackendStatus.js';
+import { useAuth } from '../contexts/AuthProvider.jsx';
+import { UserMenu } from './UserMenu.jsx';
 import { tempoRelativo } from '../utils/time.js';
 import { resumir } from '../utils/format.jsx';
 import './Sidebar.css';
@@ -29,7 +31,11 @@ function StatusDot({ status }) {
 export function Sidebar({ open, onClose }) {
   const { debates, loading, refresh } = useDebateHistory(10);
   const backend = useBackendStatus();
+  const { habilitado, autenticado } = useAuth();
   const location = useLocation();
+
+  /** Com login ativo e ninguém logado, a lista não tem o que mostrar. */
+  const precisaEntrar = habilitado && !autenticado;
 
   // Recarrega a lista ao navegar (debate novo aparece sozinho).
   useEffect(() => {
@@ -78,9 +84,15 @@ export function Sidebar({ open, onClose }) {
         </div>
 
         <div className="side__list">
-          {loading && <p className="side__empty">carregando…</p>}
+          {precisaEntrar && (
+            <p className="side__empty">
+              Entre na sua conta para ver seus debates salvos.
+            </p>
+          )}
 
-          {!loading && !debates.length && (
+          {!precisaEntrar && loading && <p className="side__empty">carregando…</p>}
+
+          {!precisaEntrar && !loading && !debates.length && (
             <p className="side__empty">
               Nenhum debate ainda. Faça a primeira pergunta ao conselho.
             </p>
@@ -106,15 +118,19 @@ export function Sidebar({ open, onClose }) {
         </div>
 
         <footer className="side__foot">
-          <span className={`side__status ${backend.online ? 'is-on' : 'is-off'}`}>
-            <i aria-hidden="true" />
-            {backend.loading
-              ? 'verificando…'
-              : backend.online
-                ? 'backend online'
-                : 'backend offline'}
-          </span>
-          {backend.mockMode && <span className="tag tag--ember">simulado</span>}
+          <UserMenu onNavigate={onClose} />
+
+          <div className="side__estado">
+            <span className={`side__status ${backend.online ? 'is-on' : 'is-off'}`}>
+              <i aria-hidden="true" />
+              {backend.loading
+                ? 'verificando…'
+                : backend.online
+                  ? 'backend online'
+                  : 'backend offline'}
+            </span>
+            {backend.mockMode && <span className="tag tag--ember">simulado</span>}
+          </div>
         </footer>
       </aside>
     </>

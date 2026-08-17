@@ -141,7 +141,7 @@ class JsonDebateStore {
    * @param {boolean} [params.mock]
    * @returns {object} debate criado
    */
-  async createDebate({ question, agents, judge, mock = false }) {
+  async createDebate({ question, agents, judge, mock = false, owner = null }) {
     const agora = new Date().toISOString();
     const debate = {
       id: randomUUID(),
@@ -151,6 +151,9 @@ class JsonDebateStore {
       updatedAt: agora,
       completedAt: null,
       mock,
+      // Dono do debate (uid do Firebase). Fica null em modo aberto/anonimo.
+      ownerUid: owner?.uid ?? null,
+      ownerEmail: owner?.email ?? null,
       agents,
       judge,
       events: [],
@@ -205,8 +208,14 @@ class JsonDebateStore {
    * @param {object} [options]
    * @param {number} [options.limit]
    */
-  async listDebates({ limit = 50 } = {}) {
-    return this.data.debates.slice(0, limit).map((debate) => ({
+  async listDebates({ limit = 50, ownerUid = null, incluirSemDono = false } = {}) {
+    const filtrados = ownerUid
+      ? this.data.debates.filter(
+          (debate) => debate.ownerUid === ownerUid || (incluirSemDono && !debate.ownerUid),
+        )
+      : this.data.debates;
+
+    return filtrados.slice(0, limit).map((debate) => ({
       id: debate.id,
       question: debate.question,
       status: debate.status,

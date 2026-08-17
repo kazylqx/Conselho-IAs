@@ -9,6 +9,45 @@
  */
 
 import { HttpError, tooManyRequests, unauthorized } from './httpError.js';
+import {
+  extrairToken,
+  isAuthConfigured,
+  isAuthRequired,
+  verifyIdToken,
+} from '../auth/firebase.js';
+
+/**
+ * Identifica o usuario a partir do ID token do Firebase.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.required] true = sem login valido, nao passa
+ *        (respeitando isAuthRequired: se o Firebase nao esta configurado, o app
+ *        segue em modo aberto e a rota continua acessivel)
+ */
+export function createAuthMiddleware({ required = false } = {}) {
+  return async function identificarUsuario(req, res, next) {
+    const token = extrairToken(req.headers ? { authorization: req.get('authorization') } : null);
+
+    // Sem Firebase no servidor: modo aberto, como antes do login existir.
+    if (!isAuthConfigured()) return next();
+
+    if (!token) {
+      if (required && isAuthRequired()) {
+        return next(unauthorized('Entre com sua conta para continuar.', 'auth_required'));
+      }
+      return next();
+    }
+
+    try {
+      req.user = await verifyIdToken(token);
+      return next();
+    } catch (erro) {
+      // Token ruim em rota opcional: segue sem usuário em vez de barrar a leitura.
+      if (!required) return next();
+      return next(erro);
+    }
+  };
+}
 
 /**
  * Exige o header `x-api-token` quando API_TOKEN estiver definido no ambiente.
