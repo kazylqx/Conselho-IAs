@@ -9,6 +9,10 @@ dist/
 # Historico de debates gerado em runtime
 backend/data/
 
+# Pacote de deploy da SquareCloud (gerado localmente)
+.deploy/
+*.zip
+
 *.log
 .DS_Store
 Thumbs.db
