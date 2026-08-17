@@ -34,7 +34,7 @@ export function FinalVerdict({ verdict, agentsById = {}, confidenceHistory = [] 
       <header className="verdict__head">
         <div className="verdict__identity">
           <AgentAvatar agent={juiz} size={44} />
-          <div>
+          <div className="verdict__titles">
             <span className="eyebrow eyebrow--brass">veredito do conselho</span>
             <h2 className="verdict__title" id="verdict-title">
               Resposta final
@@ -46,13 +46,14 @@ export function FinalVerdict({ verdict, agentsById = {}, confidenceHistory = [] 
           </div>
         </div>
 
-        <ConfidenceMeter
-          value={verdict.confidence}
-          final
-          size="lg"
-          history={confidenceHistory}
-          showLabel={false}
-        />
+        <div className="verdict__gauge">
+          <ConfidenceMeter
+            value={verdict.confidence}
+            final
+            size="lg"
+            history={confidenceHistory}
+          />
+        </div>
       </header>
 
       <div className="verdict__answer">

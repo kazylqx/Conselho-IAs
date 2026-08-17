@@ -1,6 +1,6 @@
 /**
- * Marcador de capítulo entre as rodadas. Funciona como respiro visual: linha
- * fina dos dois lados, número em mono e o nome da etapa em serifada.
+ * Cabeçalho de uma sessão do debate. Funciona como a abertura de um capítulo:
+ * número, nome da etapa, o que acontece nela e quantos conselheiros já falaram.
  */
 
 import './RoundDivider.css';
@@ -22,25 +22,31 @@ const SUBTITULOS = {
  * @param {object} props
  * @param {number} props.round número da rodada (1, 2 ou 3)
  * @param {string} [props.label] rótulo vindo do backend (reserva)
+ * @param {number} [props.count] quantos conselheiros já falaram nesta rodada
+ * @param {number} [props.total] quantos são esperados
  */
-export function RoundDivider({ round, label }) {
+export function RoundDivider({ round, label, count = null, total = null }) {
   const titulo = TITULOS[round] ?? label ?? `Rodada ${round}`;
   const subtitulo = SUBTITULOS[round];
+  const mostrarContador = count != null && total != null && round !== 3;
 
   return (
-    <div className={`chapter chapter--${round}`} role="separator" aria-label={titulo}>
-      <span className="chapter__rule" />
+    <header className={`chapter chapter--${round}`}>
+      <span className="chapter__mark" aria-hidden="true">
+        <i className="chapter__diamond" />
+        <span className="mono chapter__number">{String(round).padStart(2, '0')}</span>
+      </span>
 
-      <span className="chapter__center">
-        <span className="chapter__mark">
-          <i className="chapter__diamond" aria-hidden="true" />
-          <span className="mono chapter__number">{String(round).padStart(2, '0')}</span>
-        </span>
+      <span className="chapter__text">
         <span className="chapter__title">{titulo}</span>
         {subtitulo && <span className="chapter__subtitle">{subtitulo}</span>}
       </span>
 
-      <span className="chapter__rule" />
-    </div>
+      {mostrarContador && (
+        <span className="chapter__count mono" title="conselheiros que já falaram nesta rodada">
+          {count}/{total}
+        </span>
+      )}
+    </header>
   );
 }

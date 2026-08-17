@@ -16,12 +16,52 @@
 .room__stream {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   max-width: var(--content-max);
   margin: 0 auto;
 }
 
-/* Aviso do sistema (busca indisponível, rodada pulada...) */
+/* Avisos que chegam antes da rodada 1 (busca indisponível, por exemplo) */
+.room__opening {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* --------------------------------------------------------------------------
+   Sessão: cada rodada é um bloco fechado, com cabeçalho e as falas dentro
+   -------------------------------------------------------------------------- */
+
+.session {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, rgba(28, 39, 36, 0.55), rgba(17, 24, 23, 0.35));
+  overflow: hidden;
+  animation: rise-in var(--dur-slow) var(--ease-out) both;
+}
+
+.session__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+/* Dentro da sessão as falas ficam mais planas: a elevação é do bloco */
+.session .bubble__body {
+  box-shadow: none;
+  background: var(--ink-850);
+}
+
+/* Dentro da sessão 3 o veredito dispensa a segunda moldura: mantém o gradiente
+   e o fio de latão, mas sem borda/sombra duplicadas sobre o bloco. */
+.session--3 .verdict {
+  margin-top: 0;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Aviso do sistema */
 .room__system {
   margin: 0 auto;
   padding: var(--space-2) var(--space-4);
@@ -36,7 +76,7 @@
 }
 
 .room__failure {
-  margin-top: var(--space-3);
+  margin-top: var(--space-2);
 }
 
 .room__end {
@@ -82,6 +122,11 @@
   }
 
   .room__stream {
+    gap: var(--space-4);
+  }
+
+  .session__body {
+    padding: var(--space-3);
     gap: var(--space-3);
   }
 }

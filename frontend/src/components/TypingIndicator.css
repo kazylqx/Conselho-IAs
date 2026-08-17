@@ -1,39 +1,47 @@
-.typing-stack {
+.floor {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
-.typing {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  animation: rise-in var(--dur) var(--ease-out) both;
-}
-
-.typing__pill {
+.floor__speaker {
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 0.5rem 0.95rem;
+  padding: 0.35rem 0.85rem 0.35rem 0.35rem;
   border-radius: var(--r-full);
   background: var(--ink-800);
   border: 1px solid var(--line);
+  animation: rise-in var(--dur) var(--ease-out) both;
 }
 
-.typing__name {
+.floor__label {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.floor__name {
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--agent-color);
 }
 
-.typing__dots {
+.floor__action {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.03em;
+  color: var(--paper-faint);
+}
+
+.floor__dots {
   display: inline-flex;
   gap: 4px;
   align-items: center;
 }
 
-.typing__dots i {
+.floor__dots i {
   width: 5px;
   height: 5px;
   border-radius: var(--r-full);
@@ -42,11 +50,11 @@
   animation: typing-breathe 1.25s var(--ease-in-out) infinite;
 }
 
-.typing__dots i:nth-child(2) {
+.floor__dots i:nth-child(2) {
   animation-delay: 0.16s;
 }
 
-.typing__dots i:nth-child(3) {
+.floor__dots i:nth-child(3) {
   animation-delay: 0.32s;
 }
 
@@ -60,5 +68,11 @@
   32% {
     transform: translateY(-4px) scale(1.15);
     opacity: 1;
+  }
+}
+
+@media (max-width: 620px) {
+  .floor__speaker {
+    width: 100%;
   }
 }

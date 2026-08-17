@@ -35,17 +35,28 @@
   min-width: 0;
 }
 
+.verdict__titles {
+  min-width: 0;
+}
+
 .verdict__title {
   font-size: var(--text-2xl);
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   color: var(--paper);
 }
 
 .verdict__by {
-  margin: 2px 0 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  color: var(--paper-faint);
+  margin: 3px 0 0;
+  font-size: var(--text-xs);
+  color: var(--paper-dim);
+}
+
+.verdict__gauge {
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--r-md);
+  background: rgba(9, 12, 11, 0.4);
+  border: 1px solid var(--line);
 }
 
 .verdict__answer {
@@ -55,8 +66,10 @@
   border: 1px solid var(--line);
   /* A resposta final é o texto mais importante da tela */
   font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 400;
   font-size: var(--text-lg);
-  line-height: var(--leading-relaxed);
+  line-height: 1.72;
   color: #f6f1e6;
 }
 

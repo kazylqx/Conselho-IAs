@@ -20,9 +20,9 @@ function faixa(valor) {
 }
 
 const TAMANHOS = {
-  sm: { box: 58, stroke: 4, fonte: 'var(--text-sm)' },
-  md: { box: 92, stroke: 6, fonte: 'var(--text-xl)' },
-  lg: { box: 128, stroke: 8, fonte: 'var(--text-2xl)' },
+  sm: { box: 56, stroke: 4, fonte: '0.9rem' },
+  md: { box: 86, stroke: 6, fonte: '1.32rem' },
+  lg: { box: 106, stroke: 7, fonte: '1.6rem' },
 };
 
 /**
@@ -81,18 +81,19 @@ export function ConfidenceMeter({
           />
         </svg>
 
-        <div className="meter__value" style={{ fontSize: fonte }}>
-          <span
-            className="mono"
-            role="progressbar"
-            aria-valuenow={valor}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label="Nível de confiança do conselho"
-          >
-            {valor}
+        <div
+          className="meter__value"
+          style={{ fontSize: fonte }}
+          role="progressbar"
+          aria-valuenow={valor}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Nível de confiança do conselho"
+        >
+          <span className="meter__group">
+            <span className="meter__number mono">{valor}</span>
+            <span className="meter__percent mono">%</span>
           </span>
-          <i>%</i>
         </div>
       </div>
 

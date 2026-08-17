@@ -16,23 +16,36 @@
     stroke var(--dur-slow) var(--ease-out);
 }
 
+/* O "85% torto" vinha daqui: o container preenchia o círculo inteiro
+   (inset: 0) com `align-items: baseline`, e baseline em container esticado
+   alinha pelo TOPO. Agora o container só centraliza, e a linha de base é
+   resolvida dentro do grupo número + "%", que tem o tamanho do conteúdo. */
 .meter__value {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 1px;
+  display: grid;
+  place-items: center;
   color: var(--meter-color);
   font-weight: 600;
   letter-spacing: -0.02em;
+  line-height: 1;
   transition: color var(--dur-slow) var(--ease-out);
 }
 
-.meter__value i {
-  font-style: normal;
-  font-size: 0.55em;
-  opacity: 0.7;
+.meter__group {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.08em;
+}
+
+.meter__number {
+  font-variant-numeric: tabular-nums;
+}
+
+.meter__percent {
+  font-size: 0.5em;
+  font-weight: 500;
+  opacity: 0.72;
 }
 
 .meter__info {
