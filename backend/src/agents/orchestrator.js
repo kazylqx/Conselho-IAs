@@ -501,6 +501,20 @@ export async function runDebate({ debateId, question, emit }) {
   try {
     const resposta = await callModel({
       config: judgeConfig,
+      /**
+       * O veredito precisa ser JSON: se vier texto solto (modelo de raciocínio
+       * despejando o rascunho, por exemplo), isso conta como falha e a cadeia
+       * tenta de novo / passa para a reserva — muito melhor que exibir o
+       * rascunho mental do modelo como resposta final.
+       */
+      validate: (texto) => {
+        const interpretado = parseJudgeVerdict(texto);
+        if (!interpretado.parsed) return 'o veredito não veio como JSON válido';
+        if (!interpretado.finalAnswer || interpretado.finalAnswer.length < 40) {
+          return 'o veredito veio sem resposta final utilizável';
+        }
+        return null;
+      },
       system: buildJudgeSystemPrompt(judgeConfig),
       prompt: buildJudgePrompt({
         question,

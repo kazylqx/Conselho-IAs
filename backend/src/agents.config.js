@@ -93,8 +93,14 @@ export const agents = [
     canUseWebSearch: true,
     enabled: true,
     // Groq aceita os dois nomes; "max_completion_tokens" eh o atual.
-    // O qwen NAO aceita `reasoning_effort` (responde HTTP 400).
-    requestOptions: { tokenParam: 'max_completion_tokens' },
+    // O qwen so aceita reasoning_effort "none" ou "default" (nada de "low"), e
+    // no "default" ele despeja o raciocinio dentro da resposta, em ingles,
+    // dentro de <think>...</think>. Verificado em 17/08/2026: com "none" a
+    // resposta sai limpa e em portugues.
+    requestOptions: {
+      tokenParam: 'max_completion_tokens',
+      extraBody: { reasoning_effort: 'none' },
+    },
     fallbacks: [
       {
         provider: 'groq',
@@ -195,7 +201,14 @@ export const agents = [
       'Tom: energético, prático, propositivo.',
     ].join(' '),
     temperature: 0.7,
-    maxTokens: 1200,
+    /**
+     * Teto alto de proposito: os Gemini 3.x "pensam" antes de escrever e os
+     * tokens de pensamento contam no mesmo orcamento — com 1200 a resposta do
+     * Otto saiu cortada no meio da frase em producao. Desligar o pensamento
+     * (thinkingConfig.thinkingBudget: 0) NAO serve: parte dos modelos recusa com
+     * HTTP 400. Se ainda truncar, o backend repete com o dobro do teto.
+     */
+    maxTokens: 2600,
     timeoutMs: 60000,
     retries: 1,
     canUseWebSearch: true,
@@ -295,11 +308,27 @@ export const judge = {
   retries: 1,
   enabled: true,
   /**
+   * O juiz eh modelo de raciocinio: sem estes dois parametros ele entregou o
+   * rascunho mental inteiro em ingles no lugar do JSON (visto em producao).
+   *  - response_format json_object: obriga JSON valido na saida
+   *  - reasoning.enabled false: nao devolve o "pensamento" junto
+   * Ambos verificados no OpenRouter em 17/08/2026. Cuidado: `reasoning.exclude`
+   * parece resolver, mas devolveu conteudo VAZIO no teste.
+   */
+  requestOptions: {
+    tokenParam: 'max_tokens',
+    extraBody: {
+      response_format: { type: 'json_object' },
+      reasoning: { enabled: false },
+    },
+  },
+  /**
    * O juiz eh o unico ponto do debate sem substituto natural, entao a cadeia
    * aqui importa mais. Os dois primeiros ja foram testados devolvendo JSON
    * limpo; o gpt-oss da Groq fecha a fila como terceira opcao.
    */
   fallbacks: [
+    // Herda os requestOptions do juiz (JSON obrigatorio + sem raciocinio).
     { provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free' },
     {
       provider: 'groq',
@@ -308,7 +337,10 @@ export const judge = {
       baseUrl: 'https://api.groq.com/openai/v1',
       requestOptions: {
         tokenParam: 'max_completion_tokens',
-        extraBody: { reasoning_effort: 'low' },
+        extraBody: {
+          reasoning_effort: 'low',
+          response_format: { type: 'json_object' },
+        },
       },
     },
   ],

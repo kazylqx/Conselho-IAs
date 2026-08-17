@@ -291,7 +291,28 @@ com os demais e a interface mostra "não respondeu" na bolha dele. Duas mensagen
 - `resposta vazia: o modelo gastou os N tokens raciocinando` → modelo de raciocínio (os `gpt-oss`
   da Groq, o-series, Nemotron) consumiu o orçamento pensando e devolveu conteúdo vazio. Aumente
   `maxTokens` do agente ou use `requestOptions.extraBody = { reasoning_effort: 'low' }` — é assim
-  que a Petra está configurada (`maxTokens: 2000` + esforço baixo).
+  que a Petra está configurada.
+- **Modelo despejando o "pensamento" na resposta** (bloco `<think>` em inglês, ou o veredito
+  vindo como rascunho mental em vez de JSON). Foi o que aconteceu em produção; a defesa hoje é em
+  três camadas, e cada parâmetro abaixo foi testado contra a API real em 17/08/2026:
+
+  | Modelo | Parâmetro | Efeito verificado |
+  | ------ | --------- | ----------------- |
+  | Groq `qwen` | `reasoning_effort: 'none'` | elimina o `<think>`; com `default` ele vaza. Só aceita `none`/`default` — `low` dá HTTP 400 |
+  | OpenRouter `nemotron` (juíza) | `response_format: { type: 'json_object' }` + `reasoning: { enabled: false }` | JSON garantido. Cuidado: `reasoning: { exclude: true }` devolveu conteúdo **vazio** |
+  | Gemini 3.x | nada — só `maxTokens` folgado | `thinkingConfig.thinkingBudget: 0` é recusado (HTTP 400) por parte dos modelos |
+
+  Camada 2: `limparRaciocinio()` em `providers.js` remove `<think>`, `<thinking>`, `<reasoning>` e
+  `<reflection>` de qualquer resposta. Se a tag abrir e não fechar, o texto inteiro é considerado
+  rascunho e vira nova tentativa — melhor repetir que mostrar o rascunho.
+
+  Camada 3: o juiz passa um `validate` ao `callModel`. Veredito que não seja JSON válido com
+  resposta utilizável conta como falha do provedor e aciona a cadeia de reserva.
+- **Resposta cortada no meio da frase** → os Gemini 3.x gastam parte do `maxOutputTokens`
+  "pensando", então o teto estoura antes do texto terminar. O backend agora detecta
+  `finishReason: MAX_TOKENS` (e `finish_reason: length` nos endpoints estilo OpenAI) e repete com o
+  dobro do orçamento, em vez de entregar a frase pela metade. O Otto roda com `maxTokens: 2600`
+  por causa disso.
 
 > Nota sobre o juiz: o slug curto `nvidia/nemotron-3-ultra:free` deve resolver no OpenRouter,
 > mas se ele reclamar, use o slug completo `nvidia/nemotron-3-ultra-550b-a55b:free` (está

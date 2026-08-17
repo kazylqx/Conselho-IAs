@@ -166,6 +166,9 @@ export function buildJudgeSystemPrompt(judge) {
     '- A confiança deve refletir a realidade do debate: consenso amplo com evidência = alta;',
     '  discordância forte, poucos agentes ou dado ausente = baixa.',
     '- Responda SOMENTE com o objeto JSON pedido, sem texto antes ou depois, sem cercas de código.',
+    '- Não exponha raciocínio, rascunho ou análise passo a passo: só o JSON final.',
+    '- Todo o texto dentro do JSON precisa estar em português do Brasil, mesmo que',
+    '  parte do debate tenha chegado em outro idioma.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -224,8 +227,11 @@ export function buildJudgePrompt({
     '- Se não houver discordâncias, use uma lista vazia [].',
     '- "fontes_usadas" recebe os NÚMEROS das fontes da web que sustentam a resposta final',
     '  (os mesmos números entre colchetes listados acima). Use [] se nenhuma fonte foi usada.',
+    '  Se nenhuma fonte numerada foi listada acima, use [].',
     '- Nunca invente número de fonte que não esteja na lista.',
+    '- TODO o conteúdo do JSON precisa estar em português do Brasil.',
     '- Não use markdown, não use cercas de código, não escreva nada fora do JSON.',
+    '- Não escreva seu raciocínio: a primeira coisa da resposta deve ser "{" e a última "}".',
   );
 
   return partes.join('\n');

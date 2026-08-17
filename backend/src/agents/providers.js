@@ -14,7 +14,13 @@
 export class ProviderError extends Error {
   constructor(
     message,
-    { code = 'provider_error', status = null, retryable = false, retryAfterMs = null } = {},
+    {
+      code = 'provider_error',
+      status = null,
+      retryable = false,
+      retryAfterMs = null,
+      tokenBoost = null,
+    } = {},
   ) {
     super(message);
     this.name = 'ProviderError';
@@ -23,6 +29,8 @@ export class ProviderError extends Error {
     this.retryable = retryable;
     /** Espera sugerida pelo provedor antes da proxima tentativa (ms). */
     this.retryAfterMs = retryAfterMs;
+    /** Multiplicador de tokens para a proxima tentativa (resposta truncada). */
+    this.tokenBoost = tokenBoost;
   }
 }
 
@@ -63,6 +71,32 @@ const FAMILIA_OPENAI = new Set(['groq', 'openrouter', 'openai', 'openai-compatib
 
 /** Pausa simples usada no backoff entre tentativas. */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Remove o "pensamento" que modelos de raciocinio despejam dentro do conteudo.
+ *
+ * Vazamento real observado em producao: o qwen abriu a resposta com
+ * "<think> Here's a thinking process: 1. Analyze User Input..." em ingles, e a
+ * juiza (Nemotron) entregou o rascunho mental inteiro em vez do JSON.
+ *
+ * Se o texto tiver <think> sem fechamento, TUDO ali eh raciocinio: devolvemos
+ * vazio de proposito, para o chamador tratar como falha e tentar de novo (melhor
+ * uma nova tentativa que exibir o rascunho para o usuario).
+ */
+export function limparRaciocinio(texto = '') {
+  let limpo = String(texto);
+
+  // Blocos fechados: <think>…</think>, <thinking>, <reasoning>, <reflection>
+  limpo = limpo.replace(/<\s*(think|thinking|reasoning|reflection)\s*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '');
+
+  // Sobrou abertura sem fechamento (resposta cortada no meio do raciocínio).
+  if (/<\s*(think|thinking|reasoning|reflection)\s*>/i.test(limpo)) {
+    const fechamento = /<\s*\/\s*(think|thinking|reasoning|reflection)\s*>/i.exec(limpo);
+    limpo = fechamento ? limpo.slice(fechamento.index + fechamento[0].length) : '';
+  }
+
+  return limpo.trim();
+}
 
 /**
  * fetch com timeout via AbortController.
@@ -192,11 +226,12 @@ async function callAnthropic({ config, system, prompt, apiKey }) {
   const parsed = await parseBody(response);
   if (!response.ok) throw httpError('anthropic', response, parsed);
 
-  const text = (parsed.json?.content ?? [])
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n')
-    .trim();
+  const text = limparRaciocinio(
+    (parsed.json?.content ?? [])
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n'),
+  );
 
   if (!text) throw new ProviderError('[anthropic] resposta vazia', { code: 'empty_response' });
   return text;
@@ -243,7 +278,16 @@ async function callOpenAICompatible({ config, system, prompt, apiKey, baseUrl, e
   if (!response.ok) throw httpError(config.provider, response, parsed);
 
   const escolha = parsed.json?.choices?.[0];
-  const text = (escolha?.message?.content ?? '').trim();
+  const text = limparRaciocinio(escolha?.message?.content ?? '');
+
+  // Resposta cortada por falta de orçamento: pedir de novo com mais espaço é
+  // melhor que entregar frase pela metade (aconteceu com o Otto em produção).
+  if (text && escolha?.finish_reason === 'length') {
+    throw new ProviderError(
+      `[${config.provider}] resposta truncada em ${config.maxTokens ?? 1200} tokens`,
+      { code: 'truncated', retryable: true, tokenBoost: 2 },
+    );
+  }
 
   if (!text) {
     // Modelo de raciocinio (gpt-oss, o-series, Nemotron...) gasta o orcamento de
@@ -278,6 +322,10 @@ async function callGoogle({ config, system, prompt, apiKey }) {
       ...(config.requestOptions?.sendTemperature === false
         ? {}
         : { temperature: config.temperature ?? 0.5 }),
+      // Ajustes específicos do Gemini (ex.: thinkingConfig) entram aqui.
+      // Cuidado: `thinkingConfig.thinkingBudget: 0` eh recusado (HTTP 400) por
+      // parte dos modelos — por isso nao vem ligado por padrao.
+      ...(config.requestOptions?.extraBody ?? {}),
     },
   };
 
@@ -298,10 +346,21 @@ async function callGoogle({ config, system, prompt, apiKey }) {
   const parsed = await parseBody(response);
   if (!response.ok) throw httpError('google', response, parsed);
 
-  const text = (parsed.json?.candidates?.[0]?.content?.parts ?? [])
-    .map((part) => part.text ?? '')
-    .join('\n')
-    .trim();
+  const candidato = parsed.json?.candidates?.[0];
+  const text = limparRaciocinio(
+    (candidato?.content?.parts ?? []).map((part) => part.text ?? '').join('\n'),
+  );
+
+  // Os modelos Gemini 3.x gastam tokens "pensando" antes de escrever, e o teto
+  // de saida conta os dois. Truncar no meio da frase (caso do Otto em produção)
+  // vira nova tentativa com mais orçamento em vez de resposta pela metade.
+  if (candidato?.finishReason === 'MAX_TOKENS') {
+    throw new ProviderError(
+      `[google] resposta truncada em ${config.maxTokens ?? 1200} tokens ` +
+        `(${parsed.json?.usageMetadata?.thoughtsTokenCount ?? 0} deles gastos pensando)`,
+      { code: 'truncated', retryable: true, tokenBoost: 2 },
+    );
+  }
 
   if (!text) throw new ProviderError('[google] resposta vazia', { code: 'empty_response' });
   return text;
@@ -466,20 +525,47 @@ function prepararCandidato(candidato) {
  *  - pediu muito e existe reserva: desiste na hora, quem espera eh o usuario;
  *  - pediu muito e nao existe reserva: espera (teto de 60s) e repete.
  */
-async function tentarCandidato({ candidato, system, prompt, temReserva }) {
+async function tentarCandidato({ candidato, system, prompt, temReserva, validate }) {
   const { handler, providerName, mocked, apiKey, baseUrl } = prepararCandidato(candidato);
-  const maxAttempts = 1 + (candidato.retries ?? 1);
+  // Uma tentativa extra além das configuradas: o boost de tokens por truncamento
+  // não deve consumir a cota de repetições reservada a erro de rede/limite.
+  const maxAttempts = 2 + (candidato.retries ?? 1);
   const identificacao = `${candidato.name ?? 'agente'} · ${candidato.model}`;
+  /** Cópia mutável: o teto de tokens pode crescer entre tentativas. */
+  let emUso = candidato;
   let ultimoErro = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const text = await handler({ config: candidato, system, prompt, apiKey, baseUrl });
-      return { text, provider: providerName, model: mocked ? 'mock' : candidato.model, mocked };
+      const text = await handler({ config: emUso, system, prompt, apiKey, baseUrl });
+
+      // Validação de conteúdo (o juiz exige JSON, por exemplo). Falhar aqui vale
+      // como erro do provedor: repete e, se preciso, cai para a reserva.
+      if (typeof validate === 'function') {
+        const problema = validate(text);
+        if (problema) {
+          throw new ProviderError(`[${providerName}] ${problema}`, {
+            code: 'invalid_format',
+            retryable: true,
+          });
+        }
+      }
+
+      return { text, provider: providerName, model: mocked ? 'mock' : emUso.model, mocked };
     } catch (error) {
       ultimoErro = error;
       const retryable = error instanceof ProviderError && error.retryable;
       if (!retryable || attempt === maxAttempts) break;
+
+      // Resposta truncada: repete na hora com mais orçamento de tokens.
+      if (error.tokenBoost) {
+        const novoTeto = Math.min(8000, Math.round((emUso.maxTokens ?? 1200) * error.tokenBoost));
+        console.warn(
+          `[${identificacao}] resposta truncada; repetindo com ${novoTeto} tokens`,
+        );
+        emUso = { ...emUso, maxTokens: novoTeto };
+        continue;
+      }
 
       const sugerida = error.retryAfterMs;
 
@@ -520,10 +606,13 @@ async function tentarCandidato({ candidato, system, prompt, temReserva }) {
  * @param {object}  params.config  entrada do agents.config.js (agente ou juiz)
  * @param {string}  params.system  prompt de sistema (papel/personalidade)
  * @param {string}  params.prompt  mensagem do usuario (pergunta + contexto)
+ * @param {(texto: string) => string|null} [params.validate]
+ *        valida o conteudo devolvido; retornar uma mensagem marca a resposta como
+ *        invalida e leva a nova tentativa/reserva (o juiz usa para exigir JSON)
  * @returns {Promise<{text: string, provider: string, model: string, durationMs: number, mocked: boolean, usedFallback: boolean, attempts: Array}>}
  * @throws {ProviderError} quando TODOS os candidatos falham
  */
-export async function callModel({ config, system, prompt }) {
+export async function callModel({ config, system, prompt, validate = null }) {
   const startedAt = Date.now();
   const candidatos = montarCandidatos(config);
   const tentativas = [];
@@ -533,7 +622,13 @@ export async function callModel({ config, system, prompt }) {
     const temReserva = indice < candidatos.length - 1;
 
     try {
-      const resultado = await tentarCandidato({ candidato, system, prompt, temReserva });
+      const resultado = await tentarCandidato({
+        candidato,
+        system,
+        prompt,
+        temReserva,
+        validate,
+      });
 
       if (indice > 0) {
         console.log(
