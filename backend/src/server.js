@@ -61,7 +61,9 @@ const corsOptions = {
     return callback(new Error(`Origem não permitida pelo CORS: ${origin}`));
   },
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'x-api-token'],
+  // Authorization eh onde vai o ID token do Firebase. Sem ele nesta lista o
+  // navegador barra a requisicao no preflight, antes de sair do computador.
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-token'],
   credentials: false,
 };
 
