@@ -144,10 +144,22 @@ async function listarOpenRouter() {
 function conferirConfiguracao() {
   titulo('MODELOS USADOS EM agents.config.js');
 
-  const usados = [
+  const ativos = [
     ...agents.filter((a) => a.enabled !== false).map((a) => ({ ...a, papel: 'debatedor' })),
     { ...judge, papel: 'juiz' },
   ];
+
+  // As reservas entram na conferência: id inválido em reserva só aparece na hora
+  // do aperto, que é justamente quando não pode falhar.
+  const usados = ativos.flatMap((item) => [
+    item,
+    ...(item.fallbacks ?? []).map((reserva, indice) => ({
+      ...item,
+      ...reserva,
+      papel: `reserva ${indice + 1} de ${item.name}`,
+      name: item.name,
+    })),
+  ]);
 
   let problemas = 0;
 

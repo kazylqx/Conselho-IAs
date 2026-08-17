@@ -297,14 +297,45 @@ com os demais e a interface mostra "não respondeu" na bolha dele. Duas mensagen
 > mas se ele reclamar, use o slug completo `nvidia/nemotron-3-ultra-550b-a55b:free` (está
 > comentado no `agents.config.js`, ao lado do campo `model`).
 
-### Limites das camadas gratuitas
+### Cota gratuita e modelos de reserva
 
-Cada debate faz `2 × nº de debatedores + 1` chamadas: com os 3 debatedores padrão, **7 chamadas**
-(6 na Groq + 1 no OpenRouter) e 2 delas no Gemini. Groq limita requisições por minuto e tokens
-por dia; modelos `:free` do OpenRouter têm cota diária. Se bater no limite, o agente recebe
-HTTP 429, o backend tenta de novo uma vez (`retries`) e, se insistir, marca aquele agente como
-"não respondeu" sem derrubar o debate. Para aliviar: aumente `staggerMs` ou desligue a rodada 2
-(`enableDebateRound: false`) em `debateSettings`.
+Cada debate faz `2 × nº de debatedores + 1` chamadas de modelo (7 com os 3 debatedores padrão),
+mais uma por agente que pedir verificação na rodada 2. As camadas gratuitas são apertadas: a Groq
+limita **tokens por minuto por modelo** (8k) e o Gemini limita **requisições por modelo**
+(estourou com 20 no `gemini-3.6-flash`, pedindo 50s de espera).
+
+A saída não é trocar de plano: é **cadeia de reserva**. Cada agente tem uma lista `fallbacks` e,
+quando o modelo primário responde 429/5xx/timeout, o backend passa para o próximo na hora.
+
+> **Por que funciona:** a cota do free tier é *por modelo*. Verificado em 17/08/2026 — com o
+> `gemini-3.6-flash` retornando 429, o `gemini-3.5-flash-lite` respondeu 200 no mesmo instante.
+> O mesmo vale para o limite de tokens por minuto da Groq. Trocar de modelo destrava sem cartão
+> e sem segunda conta.
+
+As cadeias configuradas (todas com os ids validados por `npm run modelos:list`):
+
+| Agente | Primário | Reservas, em ordem |
+| ------ | -------- | ------------------ |
+| Cassandra 🧐 | Groq `qwen/qwen3.6-27b` | Groq `gpt-oss-20b` → OpenRouter `nemotron-3-super-120b-a12b:free` |
+| Petra 🔎 | Groq `gpt-oss-120b` | Groq `gpt-oss-20b` → OpenRouter `nemotron-3-super…` |
+| Otto 🌱 | Gemini `gemini-3.6-flash` | Gemini `3.5-flash-lite` → Gemini `3.7-flash` → OpenRouter `nemotron-3-super…` |
+| Juíza Íris ⚖️ | OpenRouter `nemotron-3-ultra-550b-a55b:free` | OpenRouter `nemotron-3-super…` → Groq `gpt-oss-120b` |
+
+Política de espera, em `providers.js`:
+
+- provedor pede **até 8s** → espera e repete o mesmo modelo;
+- pede mais que isso e existe reserva → **troca na hora** (quem espera é o usuário);
+- pede mais que isso e não existe reserva → espera o tempo pedido, com teto de 60s.
+
+Quando uma reserva responde, a fala aparece na interface com a etiqueta **modelo reserva** e o
+nome real do modelo que respondeu — nada de fingir que foi o primário.
+
+Detalhe importante ao editar as cadeias: a reserva herda os campos que não sobrescrever
+(`temperature`, `maxTokens`, `timeoutMs`), **menos `requestOptions`**, que é substituído. Isso é
+proposital: o `qwen` responde HTTP 400 se receber o `reasoning_effort` que o `gpt-oss` exige.
+
+Para reduzir o consumo: aumente `staggerMs`, baixe `search.maxSourcesInDebateRound` ou desligue a
+rodada 2 (`enableDebateRound: false`) em `debateSettings`.
 
 ---
 

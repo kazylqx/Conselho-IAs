@@ -85,6 +85,11 @@ export function ChatBubble({ agent, item }) {
           )}
           {item.meta?.durationMs != null && <span>{duracao(item.meta.durationMs)}</span>}
           {item.meta?.usedWebSearch && <span className="bubble__searched">verificou na web</span>}
+          {item.meta?.usedFallback && (
+            <span className="tag tag--ember" title="o modelo principal estava sem cota; uma reserva respondeu">
+              modelo reserva
+            </span>
+          )}
         </footer>
       </div>
     </article>

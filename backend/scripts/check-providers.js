@@ -46,7 +46,19 @@ for (const config of alvos) {
       system: 'Responda apenas com a palavra OK.',
       prompt: 'OK',
     });
-    console.log(`✅ ${etiqueta}\n   ${variavel} funcionando (${resposta.durationMs}ms).\n`);
+
+    if (resposta.usedFallback) {
+      console.log(
+        `⚠️  ${etiqueta}\n   o primário falhou, mas a RESERVA respondeu: ` +
+          `${resposta.provider}/${resposta.model} (${resposta.durationMs}ms).`,
+      );
+      for (const tentativa of resposta.attempts ?? []) {
+        console.log(`   ↳ ${tentativa.provider}/${tentativa.model}: ${tentativa.code}`);
+      }
+      console.log('');
+    } else {
+      console.log(`✅ ${etiqueta}\n   ${variavel} funcionando (${resposta.durationMs}ms).\n`);
+    }
   } catch (error) {
     falhas += 1;
     console.log(`❌ ${etiqueta}\n   ${error.code}: ${error.message}\n`);

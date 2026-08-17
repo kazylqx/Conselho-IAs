@@ -116,10 +116,23 @@ function extrairEsperaSugerida(response, body) {
   }
 
   const texto = `${body?.raw ?? ''} ${JSON.stringify(body?.json ?? '')}`;
-  const match = /try again in\s*([\d.]+)\s*(ms|s)\b/i.exec(texto);
-  if (match) {
+
+  // Cada provedor escreve de um jeito:
+  //   Groq   -> "Please try again in 20.52s"
+  //   Gemini -> "Please retry in 50.115412199s"
+  //   Google -> details[].retryDelay: "50s" (google.rpc.RetryInfo)
+  const padroes = [
+    /(?:try again|retry)\s*(?:in|after)?\s*[:=]?\s*([\d.]+)\s*(ms|s)\b/i,
+    /retryDelay["'\s:]+([\d.]+)\s*(ms|s)/i,
+  ];
+
+  for (const padrao of padroes) {
+    const match = padrao.exec(texto);
+    if (!match) continue;
     const valor = Number.parseFloat(match[1]);
-    if (Number.isFinite(valor)) return Math.ceil(match[2].toLowerCase() === 'ms' ? valor : valor * 1000);
+    if (Number.isFinite(valor)) {
+      return Math.ceil(match[2].toLowerCase() === 'ms' ? valor : valor * 1000);
+    }
   }
 
   return null;
@@ -376,97 +389,191 @@ const PROVIDERS = {
   mock: callMock,
 };
 
+/** Teto de espera quando NAO existe reserva para assumir. */
+const ESPERA_MAXIMA_MS = 60000;
+
+/** Acima disso, com reserva disponivel, trocar de modelo eh melhor que esperar. */
+const ESPERA_TOLERAVEL_MS = 8000;
+
 /**
- * Ponto unico de chamada de modelo.
+ * Monta a fila de tentativas de um agente: o modelo primario e as reservas.
+ * A reserva herda o que nao sobrescrever (temperature, maxTokens, timeoutMs...),
+ * mas `requestOptions` eh SUBSTITUIDO, nao mesclado — existe modelo que rejeita
+ * parametro do outro (o qwen recusa `reasoning_effort`, por exemplo).
+ */
+function montarCandidatos(config) {
+  const reservas = Array.isArray(config.fallbacks) ? config.fallbacks : [];
+
+  return [
+    { ...config, fallbacks: undefined, __reserva: 0 },
+    ...reservas.map((reserva, indice) => ({
+      ...config,
+      ...reserva,
+      fallbacks: undefined,
+      __reserva: indice + 1,
+    })),
+  ];
+}
+
+/** Resolve provedor, chave e base URL de um candidato. Lanca se faltar algo. */
+function prepararCandidato(candidato) {
+  const mocked = isMockMode() || candidato.provider === 'mock';
+  const providerName = mocked ? 'mock' : candidato.provider;
+  const handler = PROVIDERS[providerName];
+
+  if (!handler) {
+    throw new ProviderError(`Provedor desconhecido: "${candidato.provider}"`, {
+      code: 'unknown_provider',
+    });
+  }
+
+  if (mocked) return { handler, providerName, mocked, apiKey: null, baseUrl: null };
+
+  const keyEnv = candidato.apiKeyEnv || DEFAULT_KEY_ENV[candidato.provider];
+  const apiKey = keyEnv ? process.env[keyEnv] : null;
+  if (!apiKey) {
+    throw new ProviderError(
+      `Chave de API ausente: defina ${keyEnv} no .env (ou use MOCK_AI=true para testar sem chaves)`,
+      { code: 'missing_api_key' },
+    );
+  }
+
+  let baseUrl = null;
+  if (FAMILIA_OPENAI.has(candidato.provider)) {
+    // Ordem de precedencia: baseUrl do agente -> variavel de ambiente -> padrao.
+    baseUrl =
+      candidato.baseUrl ||
+      (candidato.baseUrlEnv ? process.env[candidato.baseUrlEnv] : null) ||
+      DEFAULT_BASE_URL[candidato.provider];
+
+    if (!baseUrl) {
+      throw new ProviderError(
+        `Base URL ausente para "${candidato.provider}": defina "baseUrl" no agente ou ` +
+          `${candidato.baseUrlEnv || 'OPENAI_COMPATIBLE_BASE_URL'} no .env`,
+        { code: 'missing_base_url' },
+      );
+    }
+  }
+
+  return { handler, providerName, mocked, apiKey, baseUrl };
+}
+
+/**
+ * Tenta UM candidato, com as repeticoes dele.
+ *
+ * Politica de espera:
+ *  - provedor pediu pouco tempo (<= 8s): espera e repete o mesmo modelo;
+ *  - pediu muito e existe reserva: desiste na hora, quem espera eh o usuario;
+ *  - pediu muito e nao existe reserva: espera (teto de 60s) e repete.
+ */
+async function tentarCandidato({ candidato, system, prompt, temReserva }) {
+  const { handler, providerName, mocked, apiKey, baseUrl } = prepararCandidato(candidato);
+  const maxAttempts = 1 + (candidato.retries ?? 1);
+  const identificacao = `${candidato.name ?? 'agente'} · ${candidato.model}`;
+  let ultimoErro = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const text = await handler({ config: candidato, system, prompt, apiKey, baseUrl });
+      return { text, provider: providerName, model: mocked ? 'mock' : candidato.model, mocked };
+    } catch (error) {
+      ultimoErro = error;
+      const retryable = error instanceof ProviderError && error.retryable;
+      if (!retryable || attempt === maxAttempts) break;
+
+      const sugerida = error.retryAfterMs;
+
+      // Espera longa com reserva na fila: trocar de modelo é mais rápido.
+      if (sugerida && sugerida > ESPERA_TOLERAVEL_MS && temReserva) {
+        console.warn(
+          `[${identificacao}] provedor pediu ${(sugerida / 1000).toFixed(1)}s de espera; ` +
+            'passando para a reserva',
+        );
+        break;
+      }
+
+      // Jitter: dois agentes no mesmo provedor não devem voltar no mesmo instante.
+      const jitter = 250 + Math.round(Math.random() * (sugerida ? 2500 : 400));
+      const espera = Math.min(ESPERA_MAXIMA_MS, (sugerida ?? 800 * attempt) + jitter);
+
+      console.warn(
+        `[${identificacao}] limite/instabilidade: aguardando ${(espera / 1000).toFixed(1)}s ` +
+          `antes da tentativa ${attempt + 1}`,
+      );
+      await sleep(espera);
+    }
+  }
+
+  throw ultimoErro ?? new ProviderError('Falha desconhecida ao chamar o modelo');
+}
+
+/**
+ * Ponto unico de chamada de modelo, com cadeia de reservas.
+ *
+ * Por que reservas resolvem a cota gratuita: no Gemini o limite do free tier eh
+ * POR MODELO (verificado: com o gemini-3.6-flash em 429, o 3.5-flash-lite
+ * respondeu 200 no mesmo instante). Na Groq o limite de tokens por minuto
+ * tambem eh por modelo. Ou seja, trocar de modelo destrava na hora — sem
+ * precisar de cartao nem de segunda conta.
  *
  * @param {object}  params
  * @param {object}  params.config  entrada do agents.config.js (agente ou juiz)
  * @param {string}  params.system  prompt de sistema (papel/personalidade)
  * @param {string}  params.prompt  mensagem do usuario (pergunta + contexto)
- * @returns {Promise<{text: string, provider: string, model: string, durationMs: number, mocked: boolean}>}
- * @throws {ProviderError} quando falta chave, da timeout ou a API responde erro
+ * @returns {Promise<{text: string, provider: string, model: string, durationMs: number, mocked: boolean, usedFallback: boolean, attempts: Array}>}
+ * @throws {ProviderError} quando TODOS os candidatos falham
  */
 export async function callModel({ config, system, prompt }) {
   const startedAt = Date.now();
-  const mocked = isMockMode() || config.provider === 'mock';
-  const providerName = mocked ? 'mock' : config.provider;
-  const handler = PROVIDERS[providerName];
+  const candidatos = montarCandidatos(config);
+  const tentativas = [];
+  let ultimoErro = null;
 
-  if (!handler) {
-    throw new ProviderError(`Provedor desconhecido: "${config.provider}"`, {
-      code: 'unknown_provider',
-    });
-  }
+  for (const [indice, candidato] of candidatos.entries()) {
+    const temReserva = indice < candidatos.length - 1;
 
-  // Resolucao da chave e da base URL a partir do ambiente.
-  let apiKey = null;
-  let baseUrl = null;
+    try {
+      const resultado = await tentarCandidato({ candidato, system, prompt, temReserva });
 
-  if (!mocked) {
-    const keyEnv = config.apiKeyEnv || DEFAULT_KEY_ENV[config.provider];
-    apiKey = keyEnv ? process.env[keyEnv] : null;
-    if (!apiKey) {
-      throw new ProviderError(
-        `Chave de API ausente: defina ${keyEnv} no .env (ou use MOCK_AI=true para testar sem chaves)`,
-        { code: 'missing_api_key' },
-      );
-    }
-
-    if (FAMILIA_OPENAI.has(config.provider)) {
-      // Ordem de precedencia: baseUrl do agente -> variavel de ambiente -> padrao do provedor.
-      baseUrl =
-        config.baseUrl ||
-        (config.baseUrlEnv ? process.env[config.baseUrlEnv] : null) ||
-        DEFAULT_BASE_URL[config.provider];
-
-      if (!baseUrl) {
-        throw new ProviderError(
-          `Base URL ausente para "${config.provider}": defina "baseUrl" no agente ou ` +
-            `${config.baseUrlEnv || 'OPENAI_COMPATIBLE_BASE_URL'} no .env`,
-          { code: 'missing_base_url' },
+      if (indice > 0) {
+        console.log(
+          `[${config.name ?? 'agente'}] respondeu pela reserva ${indice}: ` +
+            `${resultado.provider}/${resultado.model}`,
         );
       }
-    }
-  }
 
-  const maxAttempts = 1 + (config.retries ?? 1);
-  /** Teto da espera entre tentativas: limite de tokens por minuto costuma pedir ~20s. */
-  const ESPERA_MAXIMA_MS = 32000;
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      const text = await handler({ config, system, prompt, apiKey, baseUrl });
       return {
-        text,
-        provider: providerName,
-        model: mocked ? 'mock' : config.model,
+        ...resultado,
         durationMs: Date.now() - startedAt,
-        mocked,
+        usedFallback: indice > 0,
+        fallbackIndex: indice,
+        primaryModel: config.model,
+        attempts: tentativas,
       };
     } catch (error) {
-      lastError = error;
-      const retryable = error instanceof ProviderError && error.retryable;
-      if (!retryable || attempt === maxAttempts) break;
+      ultimoErro = error;
+      tentativas.push({
+        provider: candidato.provider,
+        model: candidato.model,
+        code: error?.code ?? 'error',
+        message: error?.message ?? String(error),
+      });
 
-      // Obedece o tempo que o provedor pediu (429 de tokens por minuto costuma
-      // pedir 10-25s); sem sugestão, cai no backoff progressivo.
-      const sugerida = error.retryAfterMs;
-      // Jitter generoso: dois agentes no mesmo provedor batendo no limite juntos
-      // não devem voltar exatamente no mesmo instante e estourar de novo.
-      const jitter = 250 + Math.round(Math.random() * (sugerida ? 2500 : 400));
-      const espera = Math.min(ESPERA_MAXIMA_MS, (sugerida ?? 800 * attempt) + jitter);
-
-      if (sugerida) {
+      if (temReserva) {
         console.warn(
-          `[${config.name ?? config.model}] limite do provedor: aguardando ` +
-            `${(espera / 1000).toFixed(1)}s antes de tentar de novo`,
+          `[${config.name ?? 'agente'}] ${candidato.provider}/${candidato.model} falhou ` +
+            `(${error?.code ?? 'erro'}); tentando a reserva ${indice + 1}`,
         );
       }
-
-      await sleep(espera);
     }
   }
 
-  throw lastError ?? new ProviderError('Falha desconhecida ao chamar o modelo');
+  // Todos falharam: o erro relatado é o do último candidato, mas a mensagem
+  // deixa claro que houve cadeia, para o diagnóstico não enganar.
+  if (candidatos.length > 1 && ultimoErro instanceof ProviderError) {
+    ultimoErro.message = `${ultimoErro.message} (após ${candidatos.length} modelos tentados)`;
+    ultimoErro.attempts = tentativas;
+  }
+
+  throw ultimoErro ?? new ProviderError('Falha desconhecida ao chamar o modelo');
 }

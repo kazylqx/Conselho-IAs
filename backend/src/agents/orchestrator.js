@@ -300,6 +300,9 @@ export async function runDebate({ debateId, question, emit }) {
           model: resposta.model,
           durationMs: resposta.durationMs,
           usedWebSearch: usouBusca,
+          // Sinaliza quando o modelo primário estava indisponível e uma reserva
+          // assumiu — a interface mostra isso na fala.
+          usedFallback: resposta.usedFallback,
           mocked: resposta.mocked,
         });
       } catch (error) {
@@ -437,6 +440,7 @@ export async function runDebate({ debateId, question, emit }) {
             durationMs: resposta.durationMs,
             usedWebSearch: buscouNaRodada,
             searchQuery: pedido.query ?? null,
+            usedFallback: resposta.usedFallback,
             mocked: resposta.mocked,
           });
         } catch (error) {
@@ -524,6 +528,7 @@ export async function runDebate({ debateId, question, emit }) {
       provider: resposta.provider,
       model: resposta.model,
       durationMs: resposta.durationMs,
+      usedFallback: resposta.usedFallback,
       mocked: resposta.mocked,
     };
   } catch (error) {

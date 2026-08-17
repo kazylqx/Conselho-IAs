@@ -26,6 +26,20 @@
  *  - baseUrl       (string)  endpoint do provedor (opcional: cada provider tem
  *                            um padrao; URL de endpoint nao eh segredo)
  *  - baseUrlEnv    (string)  alternativa: ler a base URL de uma variavel
+ *  - fallbacks     (array)   MODELOS DE RESERVA, em ordem. Se o primario falhar
+ *                            (cota, instabilidade, timeout), o backend tenta o
+ *                            proximo automaticamente. Cada reserva herda o que
+ *                            nao sobrescrever, MENOS `requestOptions`, que eh
+ *                            substituido (tem modelo que recusa parametro do
+ *                            outro: o qwen rejeita `reasoning_effort`).
+ *
+ *                            POR QUE ISSO RESOLVE COTA GRATUITA: no Gemini o
+ *                            limite do free tier eh POR MODELO — verificado em
+ *                            17/08/2026, com o gemini-3.6-flash em 429 o
+ *                            gemini-3.5-flash-lite respondeu 200 no mesmo
+ *                            instante. Na Groq o limite de tokens por minuto
+ *                            tambem eh por modelo. Trocar de modelo destrava sem
+ *                            cartao e sem segunda conta.
  *  - temperature   (number)  criatividade (0 = mais deterministico)
  *  - maxTokens     (number)  tamanho maximo da resposta
  *  - timeoutMs     (number)  tempo maximo de espera antes de considerar falha
@@ -79,7 +93,28 @@ export const agents = [
     canUseWebSearch: true,
     enabled: true,
     // Groq aceita os dois nomes; "max_completion_tokens" eh o atual.
+    // O qwen NAO aceita `reasoning_effort` (responde HTTP 400).
     requestOptions: { tokenParam: 'max_completion_tokens' },
+    fallbacks: [
+      {
+        provider: 'groq',
+        model: 'openai/gpt-oss-20b',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        maxTokens: 1600,
+        // gpt-oss eh de raciocinio: precisa de esforco baixo e teto maior.
+        requestOptions: {
+          tokenParam: 'max_completion_tokens',
+          extraBody: { reasoning_effort: 'low' },
+        },
+      },
+      {
+        provider: 'openrouter',
+        model: 'nvidia/nemotron-3-super-120b-a12b:free',
+        apiKeyEnv: 'OPENROUTER_API_KEY',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        requestOptions: { tokenParam: 'max_tokens' },
+      },
+    ],
   },
 
   // ---------------------------------------------------------------------------
@@ -116,6 +151,24 @@ export const agents = [
       // "low" deixa mais tokens para a resposta em si (aceita low|medium|high).
       extraBody: { reasoning_effort: 'low' },
     },
+    fallbacks: [
+      {
+        provider: 'groq',
+        model: 'openai/gpt-oss-20b',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        requestOptions: {
+          tokenParam: 'max_completion_tokens',
+          extraBody: { reasoning_effort: 'low' },
+        },
+      },
+      {
+        provider: 'openrouter',
+        model: 'nvidia/nemotron-3-super-120b-a12b:free',
+        apiKeyEnv: 'OPENROUTER_API_KEY',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        requestOptions: { tokenParam: 'max_tokens' },
+      },
+    ],
   },
 
   // ---------------------------------------------------------------------------
@@ -147,6 +200,27 @@ export const agents = [
     retries: 1,
     canUseWebSearch: true,
     enabled: true,
+    /**
+     * A cota gratuita do Gemini estoura rapido (limite de requisicoes POR MODELO,
+     * e ela e compartilhada entre as duas chamadas de cada debate). As reservas
+     * mantêm o Otto no Gemini: só troca a versão do flash, que tem cota propria.
+     * Tempos medidos em 17/08/2026: 3.6 ~1,0s | 3.7 ~0,9s | 3.5-lite ~0,7s
+     * (o 3.5-flash cheio ficou em 12s, por isso ele nao entra na fila).
+     * O 3.5-flash-lite vem primeiro porque, em debate real, o 3.7-flash deu
+     * timeout com o prompt cheio da rodada 2 — o lite eh feito para volume.
+     */
+    fallbacks: [
+      { provider: 'google', model: 'gemini-3.5-flash-lite' },
+      { provider: 'google', model: 'gemini-3.7-flash' },
+      {
+        // Ultimo recurso, fora do Google: mantem o conselho de pe.
+        provider: 'openrouter',
+        model: 'nvidia/nemotron-3-super-120b-a12b:free',
+        apiKeyEnv: 'OPENROUTER_API_KEY',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        requestOptions: { tokenParam: 'max_tokens' },
+      },
+    ],
   },
 
   // ---------------------------------------------------------------------------
@@ -180,6 +254,15 @@ export const agents = [
       tokenParam: 'max_completion_tokens',
       extraBody: { reasoning_effort: 'low' },
     },
+    fallbacks: [
+      {
+        provider: 'openrouter',
+        model: 'nvidia/nemotron-3-super-120b-a12b:free',
+        apiKeyEnv: 'OPENROUTER_API_KEY',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        requestOptions: { tokenParam: 'max_tokens' },
+      },
+    ],
   },
 ];
 
@@ -211,6 +294,24 @@ export const judge = {
   timeoutMs: 90000,
   retries: 1,
   enabled: true,
+  /**
+   * O juiz eh o unico ponto do debate sem substituto natural, entao a cadeia
+   * aqui importa mais. Os dois primeiros ja foram testados devolvendo JSON
+   * limpo; o gpt-oss da Groq fecha a fila como terceira opcao.
+   */
+  fallbacks: [
+    { provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free' },
+    {
+      provider: 'groq',
+      model: 'openai/gpt-oss-120b',
+      apiKeyEnv: 'GROQ_API_KEY',
+      baseUrl: 'https://api.groq.com/openai/v1',
+      requestOptions: {
+        tokenParam: 'max_completion_tokens',
+        extraBody: { reasoning_effort: 'low' },
+      },
+    },
+  ],
 };
 
 /** Parametros gerais da orquestracao do debate. */
