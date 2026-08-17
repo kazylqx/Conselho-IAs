@@ -1,11 +1,11 @@
 /**
  * ============================================================================
- *  ChatBubble — uma fala do debate
+ *  ChatBubble — uma fala do conselho
  * ============================================================================
  * Duas variantes:
- *  - "response" (rodada 1): texto corrido da resposta independente
- *  - "debate"   (rodada 2): mostra concordâncias, discordâncias, posição
- *                           (MANTENHO/REVISO) e a resposta revisada
+ *  - "response" (rodada 1): a resposta independente, texto corrido formatado
+ *  - "debate"   (rodada 2): concordâncias, discordâncias, posição (mantém /
+ *                revisou) e a resposta revisada, cada bloco com seu peso visual
  */
 
 import { AgentAvatar } from './AgentAvatar.jsx';
@@ -15,17 +15,20 @@ import './ChatBubble.css';
 
 /**
  * @param {object} props
- * @param {object} props.agent  agente publico (nome, cor, avatar, papel)
- * @param {object} props.item   item da timeline (ver useDebateStream)
+ * @param {object} props.agent agente público (nome, cor, avatar, papel)
+ * @param {object} props.item  item da timeline (ver useDebateStream)
  */
 export function ChatBubble({ agent, item }) {
-  const cor = agent?.color ?? '#7c9cff';
+  const cor = agent?.color ?? 'var(--brass)';
   const estruturado = item.structured;
   const mostrarEstrutura = item.variant === 'debate' && estruturado?.parsed;
 
   return (
     <article className="bubble" style={{ '--agent-color': cor }}>
-      <AgentAvatar agent={agent} size={42} />
+      <div className="bubble__gutter">
+        <AgentAvatar agent={agent} size={40} />
+        <span className="bubble__thread" aria-hidden="true" />
+      </div>
 
       <div className="bubble__body">
         <header className="bubble__head">
@@ -34,37 +37,37 @@ export function ChatBubble({ agent, item }) {
 
           {estruturado?.position && (
             <span
-              className={`bubble__position bubble__position--${
+              className={`bubble__stance bubble__stance--${
                 estruturado.position === 'MANTENHO' ? 'keep' : 'revise'
               }`}
             >
-              {estruturado.position === 'MANTENHO' ? 'mantém a posição' : 'revisou a resposta'}
+              {estruturado.position === 'MANTENHO' ? 'mantém a posição' : 'revisou'}
             </span>
           )}
 
-          <span className="bubble__time">{horaCurta(item.at)}</span>
+          <time className="bubble__time mono">{horaCurta(item.at)}</time>
         </header>
 
         <div className="bubble__content">
           {mostrarEstrutura ? (
             <>
               {estruturado.agreements && (
-                <section className="bubble__section bubble__section--agree">
-                  <h4>Concordâncias</h4>
+                <section className="block block--agree">
+                  <span className="eyebrow">concordâncias</span>
                   <RichText text={estruturado.agreements} />
                 </section>
               )}
 
               {estruturado.disagreements && (
-                <section className="bubble__section bubble__section--disagree">
-                  <h4>Discordâncias</h4>
+                <section className="block block--disagree">
+                  <span className="eyebrow">discordâncias</span>
                   <RichText text={estruturado.disagreements} />
                 </section>
               )}
 
               {estruturado.updatedAnswer && (
-                <section className="bubble__section">
-                  <h4>Resposta atualizada</h4>
+                <section className="block block--answer">
+                  <span className="eyebrow">resposta atualizada</span>
                   <RichText text={estruturado.updatedAnswer} />
                 </section>
               )}
@@ -74,14 +77,14 @@ export function ChatBubble({ agent, item }) {
           )}
         </div>
 
-        <footer className="bubble__meta">
+        <footer className="bubble__meta mono">
           {item.meta?.mocked ? (
-            <span className="chip chip--warn">simulado</span>
+            <span className="tag tag--ember">simulado</span>
           ) : (
-            item.meta?.model && <span>{item.meta.model}</span>
+            item.meta?.model && <span className="bubble__model">{item.meta.model}</span>
           )}
           {item.meta?.durationMs != null && <span>{duracao(item.meta.durationMs)}</span>}
-          {item.meta?.usedWebSearch && <span>🔎 usou busca na web</span>}
+          {item.meta?.usedWebSearch && <span className="bubble__searched">verificou na web</span>}
         </footer>
       </div>
     </article>
@@ -89,24 +92,27 @@ export function ChatBubble({ agent, item }) {
 }
 
 /**
- * Bolha de falha: o agente não respondeu, mas o debate continuou.
+ * Fala que não aconteceu: o agente falhou, o debate seguiu sem ele.
  * @param {object} props
  * @param {object} props.agent
  * @param {object} props.item
  */
 export function AgentErrorBubble({ agent, item }) {
   return (
-    <article className="bubble bubble--error" style={{ '--agent-color': agent?.color ?? '#fb7185' }}>
-      <AgentAvatar agent={agent} size={42} failed />
+    <article className="bubble bubble--failed" style={{ '--agent-color': 'var(--clay)' }}>
+      <div className="bubble__gutter">
+        <AgentAvatar agent={agent} size={40} failed />
+        <span className="bubble__thread" aria-hidden="true" />
+      </div>
 
       <div className="bubble__body">
         <header className="bubble__head">
           <span className="bubble__name">{agent?.name ?? item.agentId}</span>
-          <span className="chip chip--danger">não respondeu</span>
-          <span className="bubble__time">{horaCurta(item.at)}</span>
+          <span className="tag tag--clay">não respondeu</span>
+          <time className="bubble__time mono">{horaCurta(item.at)}</time>
         </header>
 
-        <div className="bubble__content bubble__content--error">
+        <div className="bubble__content bubble__content--failed">
           <p>{item.message}</p>
           {item.detail && item.detail !== item.message && (
             <details>

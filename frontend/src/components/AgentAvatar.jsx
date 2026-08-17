@@ -1,6 +1,6 @@
 /**
- * Avatar de um agente: emoji (ou inicial) dentro de um circulo com a cor
- * definida no agents.config.js do backend.
+ * Avatar de um conselheiro: emoji (ou inicial) dentro de um selo circular com a
+ * cor do agente, definida em agents.config.js no backend.
  */
 
 import './AgentAvatar.css';
@@ -8,19 +8,15 @@ import './AgentAvatar.css';
 /**
  * @param {object} props
  * @param {{id: string, name: string, avatar?: string, color?: string}} props.agent
- * @param {number} [props.size]    diametro em px
- * @param {boolean} [props.typing] anel pulsando (agente digitando)
- * @param {boolean} [props.failed] visual apagado (agente que falhou)
+ * @param {number} [props.size]    diâmetro em px
+ * @param {boolean} [props.typing] anel pulsando (agente pensando)
+ * @param {boolean} [props.failed] apagado (agente que não respondeu)
  */
 export function AgentAvatar({ agent, size = 42, typing = false, failed = false }) {
-  const cor = agent?.color ?? '#7c9cff';
+  const cor = agent?.color ?? 'var(--brass)';
   const conteudo = agent?.avatar || agent?.name?.slice(0, 1)?.toUpperCase() || '?';
 
-  const classes = [
-    'agent-avatar',
-    typing ? 'agent-avatar--typing' : '',
-    failed ? 'agent-avatar--failed' : '',
-  ]
+  const classes = ['avatar', typing && 'avatar--typing', failed && 'avatar--failed']
     .filter(Boolean)
     .join(' ');
 
@@ -28,15 +24,16 @@ export function AgentAvatar({ agent, size = 42, typing = false, failed = false }
     <span
       className={classes}
       style={{
-        '--avatar-color': cor,
+        '--agent-color': cor,
+        '--pulse-color': cor,
         width: `${size}px`,
         height: `${size}px`,
-        fontSize: `${Math.round(size * 0.48)}px`,
+        fontSize: `${Math.round(size * 0.46)}px`,
       }}
       title={agent?.name}
       aria-hidden="true"
     >
-      {conteudo}
+      <span className="avatar__glyph">{conteudo}</span>
     </span>
   );
 }

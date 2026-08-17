@@ -1,0 +1,120 @@
+.rounds__head {
+  margin-bottom: var(--space-5);
+}
+
+.rounds__title {
+  font-size: var(--text-2xl);
+  margin-top: var(--space-2);
+}
+
+.rounds__track {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+
+/* Linha que costura as três estações */
+.rounds__track::before {
+  content: '';
+  position: absolute;
+  top: 13px;
+  left: 6%;
+  right: 6%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--brass-line) 12%,
+    var(--brass-line) 88%,
+    transparent
+  );
+}
+
+.round-step {
+  position: relative;
+  padding-top: var(--space-5);
+}
+
+.round-step__marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.round-step__diamond {
+  width: 9px;
+  height: 9px;
+  background: var(--brass);
+  transform: rotate(45deg);
+  box-shadow:
+    0 0 0 5px var(--ink-900),
+    0 0 16px rgba(224, 165, 74, 0.5);
+}
+
+.round-step__number {
+  font-size: var(--text-2xs);
+  letter-spacing: var(--track-wider);
+  color: var(--brass);
+  background: var(--ink-900);
+  padding-right: var(--space-2);
+}
+
+.round-step__title {
+  font-size: var(--text-lg);
+  color: var(--paper);
+}
+
+.round-step__badge {
+  display: inline-block;
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-wide);
+  color: var(--paper-faint);
+}
+
+.round-step__text {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--paper-dim);
+}
+
+@media (max-width: 860px) {
+  .rounds__track {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+    padding-left: var(--space-5);
+  }
+
+  /* No celular a linha vira vertical */
+  .rounds__track::before {
+    top: 8px;
+    bottom: 8px;
+    left: 4px;
+    right: auto;
+    width: 1px;
+    height: auto;
+    background: linear-gradient(180deg, transparent, var(--brass-line), transparent);
+  }
+
+  .round-step {
+    padding-top: 0;
+  }
+
+  .round-step__marker {
+    left: calc(-1 * var(--space-5));
+    top: 4px;
+  }
+
+  .round-step__number {
+    display: none;
+  }
+}

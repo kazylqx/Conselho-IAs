@@ -1,0 +1,121 @@
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  animation: fade-in var(--dur) var(--ease-out) both;
+}
+
+.skeleton__chapter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-1);
+}
+
+.skeleton__rule {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line));
+}
+
+.skeleton__rule:last-child {
+  background: linear-gradient(90deg, var(--line), transparent);
+}
+
+.skeleton__chapter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-wider);
+  color: var(--paper-faint);
+}
+
+.skeleton__diamond {
+  width: 5px;
+  height: 5px;
+  background: var(--brass);
+  transform: rotate(45deg);
+  animation: skeleton-pulse 1.6s var(--ease-in-out) infinite;
+}
+
+.skeleton__row {
+  display: flex;
+  gap: var(--space-3);
+  animation: rise-in var(--dur-slow) var(--ease-out) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.skeleton__avatar {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: var(--r-full);
+  background: var(--ink-600);
+  border: 1px solid var(--line);
+}
+
+.skeleton__bubble {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  border-radius: 4px var(--r-md) var(--r-md) var(--r-md);
+}
+
+.skeleton__head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-1);
+}
+
+.skeleton__line {
+  height: 9px;
+  width: 100%;
+  border-radius: var(--r-full);
+  background: linear-gradient(
+    90deg,
+    var(--ink-600) 25%,
+    var(--ink-500) 45%,
+    var(--ink-600) 65%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.9s linear infinite;
+}
+
+.skeleton__line--name {
+  width: 96px;
+  height: 12px;
+}
+
+.skeleton__line--role {
+  width: 58px;
+  height: 10px;
+  opacity: 0.7;
+}
+
+.skeleton__hint {
+  margin: var(--space-2) 0 0;
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--paper-faint);
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.25);
+  }
+}

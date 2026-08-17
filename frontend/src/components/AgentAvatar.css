@@ -1,25 +1,41 @@
-.agent-avatar {
+.avatar {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  border-radius: 50%;
-  /* Fallback primeiro, color-mix depois (navegadores antigos ignoram a 2a linha) */
-  background: var(--bg-elev-2);
-  background: color-mix(in srgb, var(--avatar-color) 20%, var(--bg-elev-2));
-  border: 1.5px solid var(--border-strong);
-  border-color: color-mix(in srgb, var(--avatar-color) 55%, transparent);
-  color: var(--avatar-color);
+  border-radius: var(--r-full);
+  background: var(--ink-600);
   line-height: 1;
   user-select: none;
+  /* Selo: aro fino na cor do agente + leve brilho interno */
+  box-shadow:
+    inset 0 0 0 1.5px var(--agent-color),
+    inset 0 8px 18px rgba(0, 0, 0, 0.35);
 }
 
-.agent-avatar--typing {
-  animation: pulse-ring 1.6s ease-out infinite;
-  border-color: var(--avatar-color);
+.avatar::after {
+  /* Halo tênue da cor do agente */
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  background: radial-gradient(circle at 50% 30%, var(--agent-color), transparent 68%);
+  opacity: 0.16;
+  pointer-events: none;
 }
 
-.agent-avatar--failed {
-  filter: grayscale(0.85);
-  opacity: 0.55;
+.avatar__glyph {
+  position: relative;
+  z-index: 1;
+  filter: saturate(1.05);
+}
+
+.avatar--typing {
+  animation: pulse-ring 1.7s var(--ease-out) infinite;
+}
+
+.avatar--failed {
+  filter: grayscale(0.9);
+  opacity: 0.45;
 }

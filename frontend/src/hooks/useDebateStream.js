@@ -9,6 +9,10 @@
  * Os eventos persistidos tem `seq`, o que permite ignorar duplicatas quando o
  * snapshot e os eventos ao vivo se sobrepoem (recarregar a pagina no meio do
  * debate, por exemplo).
+ *
+ * Cada item da timeline carrega `fromSnapshot`: o que veio do historico aparece
+ * na hora; o que chega ao vivo entra na fila de apresentacao
+ * (ver useSequentialReveal).
  */
 
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
@@ -43,6 +47,8 @@ const estadoInicial = {
   timeline: [],
   typing: {},
   confidence: { value: 0, reason: '', final: false },
+  /** Histórico dos valores de confiança, para desenhar a evolução. */
+  confidenceHistory: [],
   verdict: null,
   status: 'running',
   seen: {},
@@ -58,17 +64,20 @@ function indexarAgentes(agents = [], judge = null) {
 
 /**
  * Aplica um evento ao estado. Funcao pura: sempre devolve um estado novo.
+ *
  * @param {object} estado
  * @param {string} type
  * @param {object} payload
+ * @param {'live'|'snapshot'} origem de onde veio o evento
  */
-function aplicarEvento(estado, type, payload) {
+function aplicarEvento(estado, type, payload, origem = 'live') {
   // Dedupe de eventos persistidos.
   if (payload?.seq != null && estado.seen[payload.seq]) return estado;
 
   const seen = payload?.seq != null ? { ...estado.seen, [payload.seq]: true } : estado.seen;
   const base = { ...estado, seen, loading: false };
   const chave = `${type}-${payload?.seq ?? payload?.at ?? Math.random()}`;
+  const fromSnapshot = origem === 'snapshot';
 
   switch (type) {
     case 'debate_started':
@@ -90,7 +99,7 @@ function aplicarEvento(estado, type, payload) {
         ...base,
         timeline: [
           ...base.timeline,
-          { kind: 'round', key: chave, round: payload.round, label: payload.label },
+          { kind: 'round', key: chave, round: payload.round, label: payload.label, fromSnapshot },
         ],
       };
 
@@ -99,7 +108,7 @@ function aplicarEvento(estado, type, payload) {
         ...base,
         timeline: [
           ...base.timeline,
-          { kind: 'system', key: chave, message: payload.message, at: payload.at },
+          { kind: 'system', key: chave, message: payload.message, at: payload.at, fromSnapshot },
         ],
       };
 
@@ -120,12 +129,13 @@ function aplicarEvento(estado, type, payload) {
             results: payload.results ?? [],
             note: payload.note ?? null,
             at: payload.at,
+            fromSnapshot,
           },
         ],
       };
 
     case 'agent_typing': {
-      // Nao mostra "digitando" depois do debate encerrado.
+      // Não mostra "digitando" depois do debate encerrado.
       if (base.status !== 'running') return base;
       return { ...base, typing: { ...base.typing, [payload.agentId]: payload.round } };
     }
@@ -147,11 +157,13 @@ function aplicarEvento(estado, type, payload) {
             content: payload.content,
             structured: payload.structured ?? null,
             at: payload.at,
+            fromSnapshot,
             meta: {
               provider: payload.provider,
               model: payload.model,
               durationMs: payload.durationMs,
               usedWebSearch: payload.usedWebSearch,
+              searchQuery: payload.searchQuery,
               mocked: payload.mocked,
             },
           },
@@ -174,20 +186,27 @@ function aplicarEvento(estado, type, payload) {
             message: payload.message,
             detail: payload.detail,
             at: payload.at,
+            fromSnapshot,
           },
         ],
       };
     }
 
-    case 'confidence_update':
+    case 'confidence_update': {
+      const valor = payload.confidence ?? 0;
       return {
         ...base,
         confidence: {
-          value: payload.confidence ?? 0,
+          value: valor,
           reason: payload.reason ?? '',
           final: Boolean(payload.final),
         },
+        confidenceHistory: [
+          ...base.confidenceHistory,
+          { value: valor, reason: payload.reason ?? '', final: Boolean(payload.final) },
+        ],
       };
+    }
 
     case 'final_verdict':
       return { ...base, verdict: payload.verdict, typing: {} };
@@ -211,7 +230,7 @@ function aplicarEvento(estado, type, payload) {
 function reducer(estado, acao) {
   switch (acao.type) {
     case 'reset':
-      return { ...estadoInicial, seen: {} };
+      return { ...estadoInicial, seen: {}, confidenceHistory: [] };
 
     case 'connection':
       return { ...estado, connected: acao.connected };
@@ -224,7 +243,6 @@ function reducer(estado, acao) {
 
     case 'snapshot': {
       const debate = acao.debate;
-      // Reaplica todos os eventos persistidos em ordem.
       let novo = {
         ...estado,
         loading: false,
@@ -243,11 +261,11 @@ function reducer(estado, acao) {
         status: debate.status === 'running' ? 'running' : debate.status,
       };
 
+      // Reaplica os eventos persistidos, marcando-os como "do histórico".
       for (const evento of debate.events ?? []) {
-        novo = aplicarEvento(novo, evento.type, evento);
+        novo = aplicarEvento(novo, evento.type, evento, 'snapshot');
       }
 
-      // Estado final vindo do registro (caso algum evento tenha se perdido).
       if (debate.verdict && !novo.verdict) novo.verdict = debate.verdict;
       if (debate.status === 'failed' && debate.error && !novo.error) novo.error = debate.error;
       if (debate.status !== 'running') novo.typing = {};
@@ -256,7 +274,7 @@ function reducer(estado, acao) {
     }
 
     case 'event':
-      return aplicarEvento(estado, acao.eventType, acao.payload);
+      return aplicarEvento(estado, acao.eventType, acao.payload, 'live');
 
     default:
       return estado;
@@ -296,9 +314,8 @@ export function useDebateStream(debateId) {
     socket.on('connect', aoConectar);
     socket.on('disconnect', aoDesconectar);
 
-    // Eventos do debate.
     const cancelarAssinatura = subscribe(EVENTOS_SOCKET, (type, payload) => {
-      // Ignora eventos de outros debates (a conexao eh compartilhada).
+      // Ignora eventos de outros debates (a conexão é compartilhada).
       if (payload?.debateId && payload.debateId !== debateId) return;
 
       if (type === 'debate_snapshot') {
@@ -322,7 +339,7 @@ export function useDebateStream(debateId) {
     };
   }, [debateId, carregar]);
 
-  /** Lista de agentes "digitando" agora, ja resolvida com nome/cor. */
+  /** Lista de agentes "digitando" agora, já resolvida com nome/cor. */
   const typingAgents = useMemo(
     () =>
       Object.entries(estado.typing).map(([agentId, round]) => ({

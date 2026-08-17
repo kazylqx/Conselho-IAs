@@ -1,10 +1,15 @@
 /**
  * ============================================================================
- *  DebateRoom — a sala de chat em grupo
+ *  DebateRoom — a sala da conversa
  * ============================================================================
- * Renderiza a linha do tempo do debate: divisores de rodada, falas dos agentes,
- * avisos do sistema, falhas e o veredito final. Rola sozinho para acompanhar as
- * novas mensagens, mas respeita o usuário quando ele sobe para reler algo.
+ * Regra central do redesign: UMA COISA DE CADA VEZ. A timeline não é renderizada
+ * crua; ela passa pela fila de apresentação (useSequentialReveal), que revela um
+ * item por vez com intervalo. Enquanto a fila não esvazia, o "está pensando" e o
+ * veredito ficam escondidos — assim o usuário sempre acompanha o ritmo em vez de
+ * receber tudo de uma vez.
+ *
+ * Debate antigo (vindo do histórico) aparece na hora: encenar 40 segundos de
+ * releitura seria só irritante.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -13,10 +18,12 @@ import { RoundDivider } from './RoundDivider.jsx';
 import { TypingIndicator } from './TypingIndicator.jsx';
 import { FinalVerdict } from './FinalVerdict.jsx';
 import { SearchCard } from './SearchCard.jsx';
+import { DebateSkeleton } from './DebateSkeleton.jsx';
+import { useSequentialReveal } from '../hooks/useSequentialReveal.js';
 import './DebateRoom.css';
 
-/** Distância do fim (px) em que ainda consideramos que o usuário está "no fim". */
-const MARGEM_FIM = 120;
+/** Distância do fim (px) em que ainda consideramos que o usuário está acompanhando. */
+const MARGEM_FIM = 140;
 
 /**
  * @param {object} props
@@ -26,6 +33,8 @@ const MARGEM_FIM = 120;
  * @param {object|null} props.verdict
  * @param {'running'|'completed'|'failed'} props.status
  * @param {string|null} [props.error]
+ * @param {Array} [props.agents] elenco (para o esqueleto de carregamento)
+ * @param {number[]} [props.confidenceHistory]
  */
 export function DebateRoom({
   timeline = [],
@@ -34,12 +43,16 @@ export function DebateRoom({
   verdict = null,
   status = 'running',
   error = null,
+  agents = [],
+  confidenceHistory = [],
 }) {
   const areaRef = useRef(null);
   const fimRef = useRef(null);
   const [seguirFim, setSeguirFim] = useState(true);
 
-  // Detecta se o usuário saiu do fim da conversa.
+  const { visibleItems, isRevealing, pending } = useSequentialReveal(timeline);
+
+  // Detecta se o usuário subiu para reler algo.
   useEffect(() => {
     const area = areaRef.current;
     if (!area) return undefined;
@@ -57,20 +70,26 @@ export function DebateRoom({
   useLayoutEffect(() => {
     if (!seguirFim) return;
     fimRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [timeline.length, typingAgents.length, verdict, seguirFim]);
+  }, [visibleItems.length, typingAgents.length, verdict, seguirFim]);
+
+  // Fila em dia = pode mostrar quem está pensando e o veredito.
+  const filaEmDia = !isRevealing;
+  const mostrarEsqueleto = status === 'running' && !visibleItems.length;
 
   return (
-    <div className="debate-room">
-      <div className="debate-room__scroll" ref={areaRef}>
-        <div className="debate-room__list">
-          {timeline.map((item) => {
+    <div className="room">
+      <div className="room__scroll" ref={areaRef}>
+        <div className="room__stream">
+          {mostrarEsqueleto && <DebateSkeleton agents={agents} />}
+
+          {visibleItems.map((item) => {
             if (item.kind === 'round') {
               return <RoundDivider key={item.key} round={item.round} label={item.label} />;
             }
 
             if (item.kind === 'system') {
               return (
-                <p className="debate-room__system" key={item.key}>
+                <p className="room__system" key={item.key}>
                   {item.message}
                 </p>
               );
@@ -95,34 +114,41 @@ export function DebateRoom({
             return <ChatBubble key={item.key} agent={agentsById[item.agentId]} item={item} />;
           })}
 
-          <TypingIndicator agents={typingAgents} />
+          {filaEmDia && <TypingIndicator agents={typingAgents} />}
 
-          {verdict && <FinalVerdict verdict={verdict} agentsById={agentsById} />}
+          {filaEmDia && verdict && (
+            <FinalVerdict
+              verdict={verdict}
+              agentsById={agentsById}
+              confidenceHistory={confidenceHistory}
+            />
+          )}
 
-          {status === 'failed' && error && (
-            <div className="alert alert--danger debate-room__failure">
-              <span aria-hidden="true">⚠️</span>
+          {status === 'failed' && error && filaEmDia && (
+            <div className="notice notice--danger room__failure">
+              <span aria-hidden="true">⚠</span>
               <div>
                 <strong>O debate foi interrompido.</strong>
-                <p style={{ margin: '0.25rem 0 0' }}>{error}</p>
+                <p>{error}</p>
               </div>
             </div>
           )}
 
-          <div ref={fimRef} />
+          <div ref={fimRef} className="room__end" />
         </div>
       </div>
 
       {!seguirFim && (
         <button
           type="button"
-          className="debate-room__jump"
+          className="room__jump"
           onClick={() => {
             setSeguirFim(true);
             fimRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
           }}
         >
-          ↓ acompanhar o debate
+          <span aria-hidden="true">↓</span> acompanhar o debate
+          {pending > 0 && <span className="room__jump-count mono">{pending}</span>}
         </button>
       )}
     </div>

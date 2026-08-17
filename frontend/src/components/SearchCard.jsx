@@ -32,7 +32,7 @@ export function SearchCard({ agent, item }) {
         <header className="search-card__head">
           <span className="search-card__title">{titulo}</span>
           <span className="search-card__query">“{item.query}”</span>
-          {item.cached && <span className="chip">reaproveitada</span>}
+          {item.cached && <span className="tag">reaproveitada</span>}
           <span className="search-card__time">{horaCurta(item.at)}</span>
         </header>
 

@@ -1,9 +1,9 @@
 /**
  * ============================================================================
- *  Sidebar — navegação + debates anteriores
+ *  Sidebar — navegação e conversas recentes
  * ============================================================================
- * No desktop fica fixa à esquerda. No celular vira uma gaveta que abre pelo
- * botão da barra superior.
+ * No desktop fica fixa à esquerda. No celular vira gaveta, aberta pela barra
+ * superior.
  */
 
 import { useEffect } from 'react';
@@ -18,71 +18,70 @@ import './Sidebar.css';
 function StatusDot({ status }) {
   const titulo =
     status === 'completed' ? 'concluído' : status === 'failed' ? 'falhou' : 'em andamento';
-  return <span className={`status-dot status-dot--${status}`} title={titulo} aria-label={titulo} />;
+  return <span className={`dot dot--${status}`} title={titulo} aria-label={titulo} />;
 }
 
 /**
  * @param {object} props
- * @param {boolean} props.open  gaveta aberta (mobile)
+ * @param {boolean} props.open gaveta aberta (mobile)
  * @param {() => void} props.onClose
  */
 export function Sidebar({ open, onClose }) {
-  const { debates, loading, refresh } = useDebateHistory(12);
+  const { debates, loading, refresh } = useDebateHistory(10);
   const backend = useBackendStatus();
   const location = useLocation();
 
-  // Recarrega a lista ao navegar (um debate novo aparece sozinho).
+  // Recarrega a lista ao navegar (debate novo aparece sozinho).
   useEffect(() => {
     refresh();
   }, [location.pathname, refresh]);
 
   return (
     <>
-      {open && <div className="sidebar-backdrop" onClick={onClose} aria-hidden="true" />}
+      {open && <div className="scrim" onClick={onClose} aria-hidden="true" />}
 
-      <aside className={`sidebar ${open ? 'sidebar--open' : ''}`}>
-        <div className="sidebar__brand">
-          <Link to="/" className="sidebar__logo" onClick={onClose}>
-            <span className="sidebar__logo-icon" aria-hidden="true">
-              ⚖️
-            </span>
-            <span>
-              <strong>Conselho de IAs</strong>
-              <small>debate multiagente</small>
-            </span>
-          </Link>
-        </div>
-
-        <Link to="/" className="button button--primary sidebar__new" onClick={onClose}>
-          + Novo debate
+      <aside className={`side ${open ? 'side--open' : ''}`}>
+        <Link to="/" className="side__brand" onClick={onClose}>
+          <span className="side__mark" aria-hidden="true">
+            ⚖
+          </span>
+          <span className="side__wordmark">
+            <strong>Conselho</strong>
+            <em>de IAs</em>
+          </span>
         </Link>
 
-        <nav className="sidebar__nav">
-          <NavLink to="/" className="sidebar__link" onClick={onClose} end>
+        <Link to="/" className="button button--primary side__new" onClick={onClose}>
+          <span aria-hidden="true">+</span> Novo debate
+        </Link>
+
+        <nav className="side__nav">
+          <NavLink to="/" className="side__link" onClick={onClose} end>
             Início
           </NavLink>
-          <NavLink to="/history" className="sidebar__link" onClick={onClose}>
-            Histórico completo
+          <NavLink to="/history" className="side__link" onClick={onClose}>
+            Histórico
           </NavLink>
         </nav>
 
-        <div className="sidebar__section">
-          <span className="sidebar__section-title">Debates recentes</span>
+        <div className="side__section">
+          <span className="eyebrow">conversas recentes</span>
           <button
             type="button"
-            className="sidebar__refresh"
+            className="side__refresh"
             onClick={refresh}
             title="Atualizar lista"
+            aria-label="Atualizar lista"
           >
             ↻
           </button>
         </div>
 
-        <div className="sidebar__list">
-          {loading && <p className="sidebar__empty">Carregando…</p>}
+        <div className="side__list">
+          {loading && <p className="side__empty">carregando…</p>}
 
           {!loading && !debates.length && (
-            <p className="sidebar__empty">
+            <p className="side__empty">
               Nenhum debate ainda. Faça a primeira pergunta ao conselho.
             </p>
           )}
@@ -91,16 +90,14 @@ export function Sidebar({ open, onClose }) {
             <NavLink
               key={debate.id}
               to={`/debate/${debate.id}`}
-              className={({ isActive }) =>
-                `sidebar__item ${isActive ? 'sidebar__item--active' : ''}`
-              }
+              className={({ isActive }) => `side__item ${isActive ? 'side__item--active' : ''}`}
               onClick={onClose}
             >
-              <span className="sidebar__item-question">
+              <span className="side__item-top">
                 <StatusDot status={debate.status} />
-                {resumir(debate.question, 64)}
+                <span className="side__item-question">{resumir(debate.question, 58)}</span>
               </span>
-              <span className="sidebar__item-meta">
+              <span className="side__item-meta mono">
                 {tempoRelativo(debate.createdAt)}
                 {debate.confidence != null && ` · ${debate.confidence}%`}
               </span>
@@ -108,16 +105,16 @@ export function Sidebar({ open, onClose }) {
           ))}
         </div>
 
-        <footer className="sidebar__footer">
-          <span className={`sidebar__status ${backend.online ? 'is-online' : 'is-offline'}`}>
+        <footer className="side__foot">
+          <span className={`side__status ${backend.online ? 'is-on' : 'is-off'}`}>
             <i aria-hidden="true" />
             {backend.loading
-              ? 'verificando backend…'
+              ? 'verificando…'
               : backend.online
                 ? 'backend online'
                 : 'backend offline'}
           </span>
-          {backend.mockMode && <span className="chip chip--warn">modo simulado</span>}
+          {backend.mockMode && <span className="tag tag--ember">simulado</span>}
         </footer>
       </aside>
     </>

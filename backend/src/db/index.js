@@ -26,6 +26,21 @@ import path from 'node:path';
 /** Estado inicial do arquivo. */
 const ESTRUTURA_VAZIA = { version: 1, debates: [] };
 
+/** Quantos caracteres da resposta final entram na previa do historico. */
+const TAMANHO_PREVIA = 180;
+
+/** Primeira linha util do veredito, sem markdown, para a lista de conversas. */
+function resumirVeredito(texto) {
+  if (!texto) return null;
+  // Remove marcacao leve (mas preserva "_", que aparece em nomes como MOCK_AI).
+  const limpo = String(texto)
+    .replace(/[*`#>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (limpo.length <= TAMANHO_PREVIA) return limpo;
+  return `${limpo.slice(0, TAMANHO_PREVIA).trimEnd()}…`;
+}
+
 class JsonDebateStore {
   /**
    * @param {object} options
@@ -201,6 +216,9 @@ class JsonDebateStore {
       agentCount: debate.agents?.length ?? 0,
       mock: debate.mock,
       hasVerdict: Boolean(debate.verdict),
+      // Prévia da resposta final: a lista de conversas do frontend mostra o
+      // começo do veredito, como um app de mensagens mostra a última mensagem.
+      preview: resumirVeredito(debate.verdict?.finalAnswer),
     }));
   }
 

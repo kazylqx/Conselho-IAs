@@ -1,101 +1,228 @@
 .home {
   flex: 1;
   overflow-y: auto;
-  padding: 2.5rem 1.5rem 3rem;
+  padding: var(--space-8) var(--space-5) var(--space-9);
 }
 
 .home__inner {
-  max-width: 860px;
+  max-width: var(--page-max);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-7);
 }
 
-.home__hero {
+.home__rule {
+  width: 100%;
+  height: 1px;
+  border: 0;
+  margin: 0;
+  background: linear-gradient(90deg, transparent, var(--line), transparent);
+}
+
+/* ------------------------------------------------------------------- hero */
+
+.hero {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
   align-items: flex-start;
+  gap: var(--space-4);
+  animation: rise-in var(--dur-slow) var(--ease-out) both;
 }
 
-.home__title {
-  font-size: clamp(2rem, 5vw, 3.1rem);
-  line-height: 1.08;
+.hero__eyebrow {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--brass-line);
+  border-radius: var(--r-full);
+  background: var(--brass-soft);
+}
+
+.hero__diamond {
+  width: 5px;
+  height: 5px;
+  background: var(--brass);
+  transform: rotate(45deg);
+}
+
+.hero__title {
+  font-size: var(--text-hero);
+  font-weight: 600;
   letter-spacing: -0.035em;
+  max-width: 18ch;
 }
 
-.home__title-accent {
-  background: linear-gradient(100deg, var(--accent), var(--accent-2));
+.hero__accent {
+  /* Destaque tipográfico: itálico serifado com gradiente de latão.
+     `display: block` é o que corrige a "letra mordida": em span inline, a caixa
+     de pintura do gradiente (background-clip: text) termina no avanço da última
+     letra de CADA linha, e a inclinação do itálico fica fora dela — era isso que
+     cortava o "m" de "quem" no fim da primeira linha. Como bloco, a caixa passa a
+     ser a largura inteira do título e sobra espaço para o itálico respirar.
+     O gradiente foi para o eixo vertical justamente para manter o visual: latão
+     na primeira linha, sálvia na última. */
+  display: block;
+  font-style: italic;
+  padding-right: 0.14em;
+  background: linear-gradient(168deg, var(--brass) 8%, #f0d9a8 52%, var(--sage) 118%);
   -webkit-background-clip: text;
   background-clip: text;
-  color: transparent;
+  /* Reserva: se o navegador não suportar o clip, o texto continua legível */
+  color: var(--brass);
 }
 
-.home__subtitle {
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .hero__accent {
+    color: transparent;
+  }
+}
+
+.hero__lead {
   margin: 0;
-  max-width: 620px;
-  font-size: 1.03rem;
-  color: var(--text-dim);
+  max-width: 62ch;
+  font-size: var(--text-lg);
+  line-height: var(--leading-normal);
+  color: var(--paper-dim);
 }
 
-.home__form {
-  padding: 1.35rem;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
+.hero__composer {
+  width: 100%;
+  max-width: 720px;
+  margin-top: var(--space-3);
 }
 
-.home__steps {
+.hero__notice {
+  width: 100%;
+  max-width: 720px;
+}
+
+/* -------------------------------------------------------- últimos debates */
+
+.recent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.recent__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.recent__all {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-wide);
+  color: var(--paper-faint);
+}
+
+.recent__all:hover {
+  color: var(--brass);
+}
+
+.recent__row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: var(--space-3);
 }
 
-.home__step {
-  padding: 1rem 1.05rem;
-  border-radius: var(--radius);
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
+.recent__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--r-md);
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  color: var(--paper);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 
-.home__step h3 {
-  font-size: 0.98rem;
-  margin: 0.45rem 0 0.3rem;
+.recent__card:hover {
+  border-color: var(--brass-line);
+  transform: translateY(-2px);
+  color: var(--paper);
 }
 
-.home__step p {
-  margin: 0;
-  font-size: 0.87rem;
+.recent__question {
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
 }
 
-.home__step-number {
-  display: inline-flex;
+.recent__meta {
+  font-size: var(--text-2xs);
+  color: var(--paper-faint);
+}
+
+.recent__meta strong {
+  color: var(--brass);
+}
+
+/* ------------------------------------------------------------------ fecho */
+
+.closing {
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-7) var(--space-5);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(700px 240px at 50% 0%, rgba(224, 165, 74, 0.1), transparent 70%),
+    var(--ink-850);
+  border: 1px solid var(--line);
+}
+
+.closing__title {
+  font-size: var(--text-2xl);
+}
+
+.closing__text {
+  margin: 0;
+  max-width: 56ch;
+  font-size: var(--text-md);
+}
+
+.closing__actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--accent-soft);
-  border: 1px solid rgba(124, 156, 255, 0.3);
-  color: var(--accent);
-  font-size: 0.8rem;
-  font-weight: 700;
+  margin-top: var(--space-2);
 }
 
+/* Notas de código nos avisos */
 .home code {
-  padding: 0.05rem 0.3rem;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.08);
-  font-family: ui-monospace, monospace;
-  font-size: 0.85em;
+  padding: 0.05rem 0.32rem;
+  border-radius: var(--r-xs);
+  background: rgba(0, 0, 0, 0.32);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 620px) {
   .home {
-    padding: 1.5rem 1rem 2.5rem;
+    padding: var(--space-6) var(--space-4) var(--space-8);
   }
 
-  .home__form {
-    padding: 1rem;
+  .home__inner {
+    gap: var(--space-6);
+  }
+
+  .hero__title {
+    max-width: none;
+  }
+
+  .hero__lead {
+    font-size: var(--text-md);
+  }
+
+  .closing {
+    padding: var(--space-5) var(--space-4);
   }
 }

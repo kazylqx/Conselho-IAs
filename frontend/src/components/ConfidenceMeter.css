@@ -1,0 +1,91 @@
+.meter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.meter__dial {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.meter__arc {
+  /* A convicção "cresce": o arco caminha até o novo valor */
+  transition:
+    stroke-dasharray var(--dur-slow) var(--ease-out),
+    stroke var(--dur-slow) var(--ease-out);
+}
+
+.meter__value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1px;
+  color: var(--meter-color);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  transition: color var(--dur-slow) var(--ease-out);
+}
+
+.meter__value i {
+  font-style: normal;
+  font-size: 0.55em;
+  opacity: 0.7;
+}
+
+.meter__info {
+  min-width: 0;
+}
+
+.meter__level {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  color: var(--paper);
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.meter__trail {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 18px;
+  margin-top: var(--space-2);
+}
+
+.meter__tick {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--meter-color);
+  opacity: 0.35;
+  transition: height var(--dur) var(--ease-out);
+}
+
+.meter__tick:last-child {
+  opacity: 1;
+}
+
+.meter__reason {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--paper-faint);
+  line-height: var(--leading-snug);
+}
+
+.meter--final .meter__dial::after {
+  /* Selo de "fechado pelo juiz": brilho externo discreto */
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: var(--r-full);
+  box-shadow: 0 0 26px var(--meter-color);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.meter--sm {
+  gap: var(--space-2);
+}

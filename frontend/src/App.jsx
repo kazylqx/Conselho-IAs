@@ -3,7 +3,7 @@
  *  App — layout e rotas
  * ============================================================================
  * Sidebar fixa (gaveta no celular) + área de conteúdo com as três telas:
- * Home (fazer a pergunta), Debate (sala ao vivo) e History (debates antigos).
+ * Home (landing + pergunta), Debate (sala ao vivo) e History (arquivo).
  */
 
 import { useEffect, useState } from 'react';
@@ -16,12 +16,17 @@ import History from './pages/History.jsx';
 /** Tela para rotas inexistentes. */
 function NaoEncontrado() {
   return (
-    <div style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
-      <h1>Página não encontrada</h1>
+    <div className="debate-empty">
+      <span className="debate-empty__mark" aria-hidden="true">
+        ⚖
+      </span>
+      <h2>Página não encontrada</h2>
       <p className="muted">Essa rota não existe no Conselho de IAs.</p>
-      <Link to="/" className="button button--primary" style={{ textDecoration: 'none' }}>
-        Voltar ao início
-      </Link>
+      <div className="debate-empty__actions">
+        <Link to="/" className="button button--primary">
+          Voltar ao início
+        </Link>
+      </div>
     </div>
   );
 }
@@ -30,7 +35,7 @@ export default function App() {
   const [menuAberto, setMenuAberto] = useState(false);
   const location = useLocation();
 
-  // Fecha a gaveta ao trocar de página (comportamento esperado no mobile).
+  // Fecha a gaveta ao trocar de página (esperado no mobile).
   useEffect(() => {
     setMenuAberto(false);
   }, [location.pathname]);
@@ -50,7 +55,10 @@ export default function App() {
           >
             ☰
           </button>
-          <span className="topbar__title">⚖️ Conselho de IAs</span>
+
+          <Link to="/" className="topbar__brand">
+            <span aria-hidden="true">⚖</span> Conselho <span>de IAs</span>
+          </Link>
         </header>
 
         <main className="app__content">

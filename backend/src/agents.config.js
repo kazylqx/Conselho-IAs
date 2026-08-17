@@ -38,11 +38,14 @@
  *                              sendTemperature: boolean (alguns modelos de
  *                              raciocinio recusam o parametro temperature)
  *
- * ATENCAO AOS IDS DE MODELO: eles mudam com frequencia. Se a API responder
- * "model not found", liste os modelos disponiveis e troque o campo `model`:
- *   Groq:       curl https://api.groq.com/openai/v1/models -H "Authorization: Bearer $GROQ_API_KEY"
- *   OpenRouter: https://openrouter.ai/models?q=free
- *   Gemini:     https://ai.google.dev/gemini-api/docs/models
+ * ATENCAO AOS IDS DE MODELO: eles mudam com frequencia (e a Google desativa
+ * modelo antigo para conta nova). Se a API responder "model not found" ou
+ * "no longer available", rode:
+ *
+ *     npm run modelos:list
+ *
+ * Ele lista o que as SUAS chaves podem usar em cada provedor; basta trocar o
+ * campo `model` do agente pelo id que aparecer ali.
  */
 
 /** Agentes que participam das rodadas 1 e 2 do debate. */
@@ -55,7 +58,10 @@ export const agents = [
     name: 'Cassandra',
     role: 'Cética',
     avatar: '🧐',
-    color: '#7c9cff',
+    // Cores alinhadas ao design system do frontend (tinta + latão + sálvia + barro).
+    color: '#7fa8c9',
+    // Frase curta exibida na apresentação do elenco (o `persona` abaixo é o prompt).
+    tagline: 'Duvida de tudo que chega sem evidência.',
     provider: 'groq',
     model: 'qwen/qwen3.6-27b',
     apiKeyEnv: 'GROQ_API_KEY',
@@ -84,7 +90,8 @@ export const agents = [
     name: 'Petra',
     role: 'Pesquisadora',
     avatar: '🔎',
-    color: '#4ecdc4',
+    color: '#74a98f',
+    tagline: 'Traz dados, fontes e números para a mesa.',
     provider: 'groq',
     model: 'openai/gpt-oss-120b',
     apiKeyEnv: 'GROQ_API_KEY',
@@ -96,12 +103,18 @@ export const agents = [
       'Tom: didático, organizado, orientado a evidência.',
     ].join(' '),
     temperature: 0.4,
-    maxTokens: 1200,
+    // gpt-oss eh modelo de raciocinio: parte dos tokens vai para o "pensar",
+    // entao o orcamento aqui eh maior que o dos outros agentes.
+    maxTokens: 2000,
     timeoutMs: 60000,
     retries: 1,
     canUseWebSearch: true,
     enabled: true,
-    requestOptions: { tokenParam: 'max_completion_tokens' },
+    requestOptions: {
+      tokenParam: 'max_completion_tokens',
+      // "low" deixa mais tokens para a resposta em si (aceita low|medium|high).
+      extraBody: { reasoning_effort: 'low' },
+    },
   },
 
   // ---------------------------------------------------------------------------
@@ -112,9 +125,14 @@ export const agents = [
     name: 'Otto',
     role: 'Otimista',
     avatar: '🌱',
-    color: '#ffd166',
+    color: '#e0a54a',
+    tagline: 'Procura o melhor caminho possível sem virar ingênuo.',
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    // Verificado contra a API em 16/08/2026. O "gemini-2.5-flash" ainda aparece
+    // na listagem, mas o generateContent recusa para contas novas.
+    // Alternativas testadas e funcionando: 'gemini-3.7-flash', 'gemini-3.5-flash'
+    // e o alias 'gemini-flash-latest' (segue sempre o flash mais novo).
+    model: 'gemini-3.6-flash',
     apiKeyEnv: 'GEMINI_API_KEY',
     persona: [
       'Você é otimista construtivo. Procura o melhor caminho possível, oportunidades',
@@ -139,7 +157,8 @@ export const agents = [
     name: 'Dante',
     role: 'Advogado do Diabo',
     avatar: '😈',
-    color: '#ff6b6b',
+    color: '#d2694a',
+    tagline: 'Ataca a resposta fácil para ver se ela aguenta.',
     provider: 'groq',
     model: 'openai/gpt-oss-20b',
     apiKeyEnv: 'GROQ_API_KEY',
@@ -151,12 +170,15 @@ export const agents = [
       'um motivo concreto. Tom: provocativo, incisivo, porém honesto.',
     ].join(' '),
     temperature: 0.6,
-    maxTokens: 1200,
+    maxTokens: 2000,
     timeoutMs: 60000,
     retries: 1,
     canUseWebSearch: false,
     enabled: false,
-    requestOptions: { tokenParam: 'max_completion_tokens' },
+    requestOptions: {
+      tokenParam: 'max_completion_tokens',
+      extraBody: { reasoning_effort: 'low' },
+    },
   },
 ];
 
@@ -169,11 +191,13 @@ export const judge = {
   name: 'Juíza Íris',
   role: 'Juíza',
   avatar: '⚖️',
-  color: '#9d8cff',
+  color: '#e4d9be',
+  tagline: 'Lê o debate inteiro e assina o veredito final.',
   provider: 'openrouter',
-  model: 'nvidia/nemotron-3-ultra:free',
-  // Se o OpenRouter responder "model not found", tente o slug completo:
-  // 'nvidia/nemotron-3-ultra-550b-a55b:free'
+  // Slug completo (o curto "nvidia/nemotron-3-ultra:free" NÃO existe na API).
+  // Verificado em 16/08/2026: responde e devolve JSON limpo. 1M de contexto.
+  // Alternativa mais leve, também gratuita: 'nvidia/nemotron-3-super-120b-a12b:free'.
+  model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
   apiKeyEnv: 'OPENROUTER_API_KEY',
   baseUrl: 'https://openrouter.ai/api/v1',
   persona: [
@@ -256,6 +280,7 @@ export function toPublicAgent(agent) {
     id: agent.id,
     name: agent.name,
     role: agent.role,
+    tagline: agent.tagline ?? '',
     avatar: agent.avatar,
     color: agent.color,
     provider: agent.provider,

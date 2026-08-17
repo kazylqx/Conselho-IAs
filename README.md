@@ -124,6 +124,7 @@ VITE_BACKEND_URL=http://localhost:3000
 ```bash
 cd backend
 npm run providers:check                       # valida GROQ / GEMINI / OPENROUTER, um agente por vez
+npm run modelos:list                          # lista os modelos que suas chaves podem usar
 npm run busca:check                           # valida a chave da Tavily com 1 busca real
 npm run debate:teste                          # debate completo em modo simulado
 npm run debate:teste -- --real "sua pergunta" # debate usando as APIs reais do .env
@@ -135,6 +136,55 @@ da variável.
 
 ---
 
+## Interface e design system
+
+A identidade é a de uma **câmara de conselho**, não de dashboard de IA: tinta esverdeada
+profunda como a sala, latão/âmbar como a autoridade (a balança), sálvia para consenso e barro
+para divergência. Dark mode é o padrão.
+
+Tudo está declarado em `frontend/src/styles/tokens.css` — trocar a paleta, a escala tipográfica
+ou os raios de borda do produto inteiro é mexer nesse arquivo.
+
+| Camada | Escolha |
+| ------ | ------- |
+| Superfícies | `--ink-900` a `--ink-500` (tinta esverdeada) |
+| Acentos | `--brass` `#e0a54a`, `--sage` `#74a98f`, `--clay` `#d2694a`, `--ivory` `#e4d9be` |
+| Títulos | **Fraunces** (serifada com personalidade) |
+| Corpo | **Outfit** (sans geométrica) |
+| Números e rótulos | **JetBrains Mono** |
+| Motion | entradas `rise-in`/`fade-in` com `--ease-out`, sempre respeitando `prefers-reduced-motion` |
+
+As cores dos agentes fazem parte do sistema: ficam em `agents.config.js` (backend) e são
+consumidas como `--agent-color` nas bolhas, avatares e nomes — por isso foram harmonizadas com a
+paleta (aço, sálvia, latão, barro; a juíza em marfim).
+
+### A tela de debate: uma coisa de cada vez
+
+O problema do layout antigo era o despejo de informação: três respostas caindo juntas. Agora a
+timeline passa por uma **fila de apresentação** (`useSequentialReveal`), que revela um item por
+vez com intervalo — mais longo nos marcadores de rodada, mais curto quando a fila acumula.
+Enquanto a fila não esvazia, o "está pensando" e o veredito ficam escondidos, então o usuário
+sempre acompanha o ritmo.
+
+Debate antigo aberto pelo histórico aparece na hora: cada item vem marcado com `fromSnapshot` e
+a encenação é ignorada — ninguém quer esperar 40 segundos para reler algo.
+
+Outras peças do redesign:
+
+- **`RoundDivider`** virou marcador de capítulo (linha, losango de latão, número em mono, nome da
+  etapa e uma linha explicando o que acontece ali) com respiro generoso entre rodadas.
+- **`ConfidenceMeter`** substituiu a barra genérica: anel que preenche, cor migrando de barro
+  para sálvia conforme a convicção sobe, e marcas mostrando a evolução ao longo do debate.
+- **`FinalVerdict`** não é bolha de chat: é documento, com fio de latão no topo, resposta em
+  serifada maior, mostrador grande, consenso/divergências em colunas e as fontes clicáveis.
+- **`DebateSkeleton`** cobre a espera da primeira resposta usando os avatares reais dos
+  conselheiros em vez de retângulos cinzas.
+- **Histórico** virou lista de conversas (pergunta, prévia da resposta final, tempo relativo,
+  confiança) com exclusão que remove na hora e só chama o `DELETE` no fim da janela de
+  "Desfazer" — o desfazer é real, não teatro.
+
+---
+
 ## Configuração das chaves de API (obrigatório para rodar)
 
 O projeto usa **três provedores, todos com camada gratuita**:
@@ -143,8 +193,8 @@ O projeto usa **três provedores, todos com camada gratuita**:
 | ------------ | ------ | -------- | -------------------- |
 | Debatedor 1 (Cassandra 🧐, Cética) | `qwen/qwen3.6-27b` | Groq | `GROQ_API_KEY` |
 | Debatedor 2 (Petra 🔎, Pesquisadora) | `openai/gpt-oss-120b` | Groq (mesma chave) | `GROQ_API_KEY` |
-| Debatedor 3 (Otto 🌱, Otimista) | `gemini-2.5-flash` | Google Gemini | `GEMINI_API_KEY` |
-| Juiz final (Juíza Íris ⚖️) | `nvidia/nemotron-3-ultra:free` | OpenRouter | `OPENROUTER_API_KEY` |
+| Debatedor 3 (Otto 🌱, Otimista) | `gemini-3.6-flash` | Google Gemini | `GEMINI_API_KEY` |
+| Juiz final (Juíza Íris ⚖️) | `nvidia/nemotron-3-ultra-550b-a55b:free` | OpenRouter | `OPENROUTER_API_KEY` |
 
 **Nenhuma chave existe no código.** Os agentes guardam apenas o *nome* da variável (`apiKeyEnv`)
 e o backend lê com `process.env.NOME_DA_VARIAVEL` na hora da chamada. O frontend nunca vê
@@ -222,16 +272,26 @@ com os demais e a interface mostra "não respondeu" na bolha dele. Duas mensagen
 - `[openrouter] HTTP 401: Missing Authentication header` → apesar do texto, quase sempre é
   **formato de chave inválido**: a chave do OpenRouter começa com `sk-or-v1-`. Com o formato
   certo e chave inexistente a mensagem muda para `User not found.`.
-- `HTTP 404: model not found` → o id do modelo mudou. Liste os disponíveis e troque o campo
-  `model` do agente em `agents.config.js`:
+- **Id de modelo inválido** — o erro mais comum, porque os provedores trocam e aposentam modelos
+  sem aviso. Sintomas reais já vistos neste projeto:
+  - `[google] HTTP 404: This model models/gemini-2.5-flash is no longer available to new users`
+  - `[openrouter] HTTP 400: nvidia/nemotron-3-ultra:free is not a valid model ID`
+
+  Nos dois casos, rode:
 
   ```bash
-  # Groq
-  curl https://api.groq.com/openai/v1/models -H "Authorization: Bearer $GROQ_API_KEY"
+  cd backend
+  npm run modelos:list          # lista o que suas chaves podem usar e marca ❌ o que está errado
+  npm run modelos:list -- flash # filtra por pedaço do nome
   ```
 
-  OpenRouter: <https://openrouter.ai/models?q=free> · Gemini:
-  <https://ai.google.dev/gemini-api/docs/models>
+  Depois troque o campo `model` do agente em `agents.config.js` pelo id que apareceu.
+  Atenção: no Gemini, aparecer na listagem **não** garante acesso — modelos antigos ficam
+  visíveis mas recusam contas novas. O `providers:check` é quem dá a palavra final.
+- `resposta vazia: o modelo gastou os N tokens raciocinando` → modelo de raciocínio (os `gpt-oss`
+  da Groq, o-series, Nemotron) consumiu o orçamento pensando e devolveu conteúdo vazio. Aumente
+  `maxTokens` do agente ou use `requestOptions.extraBody = { reasoning_effort: 'low' }` — é assim
+  que a Petra está configurada (`maxTokens: 2000` + esforço baixo).
 
 > Nota sobre o juiz: o slug curto `nvidia/nemotron-3-ultra:free` deve resolver no OpenRouter,
 > mas se ele reclamar, use o slug completo `nvidia/nemotron-3-ultra-550b-a55b:free` (está
@@ -280,9 +340,9 @@ O conselho que vem configurado:
 | ------ | ----- | ----------------- |
 | Cassandra 🧐 | Cética | Groq · `qwen/qwen3.6-27b` |
 | Petra 🔎 | Pesquisadora | Groq · `openai/gpt-oss-120b` |
-| Otto 🌱 | Otimista | Gemini · `gemini-2.5-flash` |
+| Otto 🌱 | Otimista | Gemini · `gemini-3.6-flash` |
 | Dante 😈 | Advogado do Diabo (**desativado** — exemplo de 4º debatedor) | Groq · `openai/gpt-oss-20b` |
-| Juíza Íris ⚖️ | Juíza (rodada 3) | OpenRouter · `nvidia/nemotron-3-ultra:free` |
+| Juíza Íris ⚖️ | Juíza (rodada 3) | OpenRouter · `nvidia/nemotron-3-ultra-550b-a55b:free` |
 
 Adicionar um agente = copiar um bloco e ajustar (ou só trocar `enabled: false` para `true` no
 Dante). Nada mais precisa ser mexido: o frontend lê o conselho de `GET /api/agents` e desenha os
@@ -531,8 +591,17 @@ sem quebrar.
   busca com erro, veredito com fontes citadas, veredito com fontes do registro e veredito sem
   fonte (seção escondida).
 
-Ainda **não** testado (depende das suas chaves): a resposta real dos modelos e, portanto, o
-parsing dos formatos que cada um devolve nas rodadas 2 e 3. O código tem fallback para os dois
-casos (texto fora do formato e juiz que falha), mas o ajuste fino de prompt só dá para fazer com
-as chaves reais ligadas — rode `npm run providers:check` primeiro e depois
-`npm run debate:teste -- --real "sua pergunta"`.
+### Com as chaves reais (16/08/2026)
+
+- `providers:check`: os 4 agentes respondendo — Groq (`qwen/qwen3.6-27b` e `openai/gpt-oss-120b`),
+  Gemini (`gemini-3.6-flash`) e OpenRouter (`nvidia/nemotron-3-ultra-550b-a55b:free`).
+- Debate real de ponta a ponta com busca ligada, sobre preço de hospedagem: rodada 1 com 5 fontes
+  compartilhadas onde todos concluíram "as fontes não têm valores"; na rodada 2 um agente pediu
+  verificação, trouxe as fontes [6] e [7] com os preços e **a incerteza foi resolvida dentro do
+  debate**; outro agente apontou que [8] e [9] falavam do Square de pagamentos, não do Square
+  Cloud. O juiz citou `fontes_usadas: [6, 7]` e a UI recebeu os dois links.
+- Debate real sem busca (pergunta atemporal): posições `REVISO`/`MANTENHO`/`MANTENHO` detectadas,
+  confiança 60% → 58% → 85% (final do juiz), nenhum `agent_error`.
+- Parser da rodada 2 contra os formatos que os modelos realmente usam: rótulos em negrito sem
+  dois-pontos, cabeçalhos `###`, eco das instruções dentro da resposta, posição escrita só no meio
+  do parágrafo e texto sem rótulo algum.

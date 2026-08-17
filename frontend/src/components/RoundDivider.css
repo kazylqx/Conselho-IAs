@@ -1,42 +1,92 @@
-.round-divider {
+.chapter {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin: 1.4rem 0 0.4rem;
-  animation: fade-up 0.25s ease both;
+  gap: var(--space-4);
+  /* Respiro generoso: é o que separa uma rodada da outra aos olhos */
+  margin: var(--space-8) 0 var(--space-5);
+  animation: fade-in var(--dur-slow) var(--ease-out) both;
 }
 
-.round-divider::after {
-  content: '';
+.chapter:first-child {
+  margin-top: var(--space-3);
+}
+
+.chapter__rule {
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, var(--border-strong), transparent);
+  background: linear-gradient(90deg, transparent, var(--line-strong));
 }
 
-.round-divider__badge {
+.chapter__rule:last-child {
+  background: linear-gradient(90deg, var(--line-strong), transparent);
+}
+
+.chapter__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  padding: 0 var(--space-2);
+}
+
+.chapter__mark {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  border: 1px solid rgba(124, 156, 255, 0.35);
-  color: var(--accent);
-  font-size: 0.72rem;
-  font-weight: 700;
+  gap: var(--space-2);
 }
 
-.round-divider__label {
-  font-size: 0.78rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
+.chapter__diamond {
+  width: 6px;
+  height: 6px;
+  background: var(--brass);
+  transform: rotate(45deg);
+  box-shadow: 0 0 12px rgba(224, 165, 74, 0.55);
 }
 
-.round-divider--3 .round-divider__badge {
-  background: rgba(167, 139, 250, 0.16);
-  border-color: rgba(167, 139, 250, 0.4);
-  color: var(--accent-2);
+.chapter__number {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: var(--track-wider);
+  color: var(--brass);
+}
+
+.chapter__title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--paper);
+  letter-spacing: var(--track-tight);
+  white-space: nowrap;
+}
+
+.chapter__subtitle {
+  font-size: var(--text-xs);
+  color: var(--paper-faint);
+  line-height: var(--leading-snug);
+}
+
+/* O capítulo do veredito é o clímax: destaque um pouco maior */
+.chapter--3 .chapter__title {
+  color: var(--ivory);
+}
+
+.chapter--3 .chapter__diamond {
+  background: var(--ivory);
+  box-shadow: 0 0 14px rgba(228, 217, 190, 0.5);
+}
+
+@media (max-width: 620px) {
+  .chapter {
+    margin: var(--space-6) 0 var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .chapter__title {
+    font-size: var(--text-base);
+  }
+
+  .chapter__subtitle {
+    display: none;
+  }
 }

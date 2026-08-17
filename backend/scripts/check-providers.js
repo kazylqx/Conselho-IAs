@@ -39,9 +39,10 @@ for (const config of alvos) {
   }
 
   try {
-    // Chamada minima: 1 token de resposta eh suficiente para validar credencial.
+    // 300 tokens: pouco o suficiente para ser barato, folgado o bastante para
+    // modelo de raciocinio (gpt-oss e afins gastam tokens "pensando" antes).
     const resposta = await callModel({
-      config: { ...config, maxTokens: 16, retries: 0, timeoutMs: 30000 },
+      config: { ...config, maxTokens: 300, retries: 0, timeoutMs: 30000 },
       system: 'Responda apenas com a palavra OK.',
       prompt: 'OK',
     });

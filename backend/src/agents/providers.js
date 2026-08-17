@@ -177,6 +177,9 @@ async function callOpenAICompatible({ config, system, prompt, apiKey, baseUrl, e
     body.temperature = config.temperature ?? 0.5;
   }
 
+  // Parametros especificos do provedor (ex.: reasoning_effort na Groq).
+  Object.assign(body, config.requestOptions?.extraBody ?? {});
+
   const url = `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
   const response = await fetchWithTimeout(
     url,
@@ -195,10 +198,25 @@ async function callOpenAICompatible({ config, system, prompt, apiKey, baseUrl, e
   const parsed = await parseBody(response);
   if (!response.ok) throw httpError(config.provider, response, parsed);
 
-  const text = (parsed.json?.choices?.[0]?.message?.content ?? '').trim();
+  const escolha = parsed.json?.choices?.[0];
+  const text = (escolha?.message?.content ?? '').trim();
+
   if (!text) {
-    throw new ProviderError(`[${config.provider}] resposta vazia`, { code: 'empty_response' });
+    // Modelo de raciocinio (gpt-oss, o-series, Nemotron...) gasta o orcamento de
+    // tokens "pensando" e devolve content vazio. Mensagem especifica para isso.
+    const truncado = escolha?.finish_reason === 'length';
+    const pensou = Boolean(escolha?.message?.reasoning);
+
+    throw new ProviderError(
+      truncado || pensou
+        ? `[${config.provider}] resposta vazia: o modelo gastou os ${config.maxTokens ?? 1200} tokens ` +
+          'raciocinando. Aumente maxTokens do agente ou use requestOptions.extraBody = ' +
+          "{ reasoning_effort: 'low' }."
+        : `[${config.provider}] resposta vazia`,
+      { code: 'empty_response' },
+    );
   }
+
   return text;
 }
 

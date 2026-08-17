@@ -13,7 +13,8 @@
     "dev": "node --watch src/server.js",
     "debate:teste": "node scripts/smoke-debate.js",
     "providers:check": "node scripts/check-providers.js",
-    "busca:check": "node scripts/check-search.js"
+    "busca:check": "node scripts/check-search.js",
+    "modelos:list": "node scripts/list-models.js"
   },
   "dependencies": {
     "cors": "2.8.5",

@@ -1,0 +1,139 @@
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.composer__frame {
+  position: relative;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--ink-700), var(--ink-800));
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-md);
+  transition:
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+}
+
+.composer--active .composer__frame {
+  border-color: var(--brass-line);
+  box-shadow: var(--glow-brass), var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.composer__label {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+.composer__input {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  border: none;
+  background: transparent;
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  line-height: var(--leading-normal);
+  padding: 0;
+}
+
+.composer__input::placeholder {
+  color: var(--paper-faint);
+}
+
+.composer__input:focus {
+  outline: none;
+}
+
+.composer__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--line);
+}
+
+.composer__hint {
+  font-size: var(--text-2xs);
+  color: var(--paper-faint);
+  letter-spacing: 0.04em;
+}
+
+.composer__spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--r-full);
+  border: 2px solid rgba(26, 18, 5, 0.35);
+  border-top-color: #1a1205;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.composer__suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.composer__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.composer__chip {
+  padding: 0.34rem 0.78rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--ink-800);
+  color: var(--paper-dim);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.composer__chip:hover:not(:disabled) {
+  color: var(--paper);
+  border-color: var(--brass-line);
+  background: var(--brass-soft);
+}
+
+@media (max-width: 620px) {
+  .composer__frame {
+    padding: var(--space-3);
+  }
+
+  .composer__input {
+    font-size: var(--text-base);
+    min-height: 84px;
+  }
+
+  .composer__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .composer__submit {
+    width: 100%;
+  }
+
+  .composer__hint {
+    text-align: center;
+  }
+}

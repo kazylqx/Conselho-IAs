@@ -1,0 +1,164 @@
+.ensemble__head {
+  max-width: 620px;
+  margin-bottom: var(--space-5);
+}
+
+.ensemble__title {
+  font-size: var(--text-2xl);
+  margin: var(--space-2) 0 var(--space-2);
+}
+
+.ensemble__lead {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+}
+
+.ensemble__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.ensemble__judge {
+  margin-top: var(--space-3);
+}
+
+/* ------------------------------------------------------------------ cartão */
+
+.cast {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, var(--ink-700), var(--ink-800) 70%);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  transition:
+    transform var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+
+.cast::before {
+  /* Rastro da cor do agente no topo do cartão */
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--agent-color), transparent 80%);
+}
+
+.cast::after {
+  /* Brilho difuso que aparece no hover */
+  content: '';
+  position: absolute;
+  inset: -40% -40% auto auto;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, var(--agent-color), transparent 70%);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+  pointer-events: none;
+}
+
+.cast:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--agent-color) 45%, var(--line));
+  box-shadow: var(--shadow-md);
+}
+
+.cast:hover::after {
+  opacity: 0.1;
+}
+
+.cast__index {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-4);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--track-wider);
+  color: var(--paper-faint);
+  text-transform: uppercase;
+}
+
+.cast__name {
+  font-size: var(--text-xl);
+  color: var(--paper);
+  margin-top: var(--space-1);
+}
+
+.cast__role {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-wide);
+  color: var(--agent-color);
+}
+
+.cast__tagline {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--paper-dim);
+}
+
+.cast__model {
+  margin-top: auto;
+  padding-top: var(--space-3);
+  font-size: var(--text-2xs);
+  color: var(--paper-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A juíza ganha um cartão mais largo e cerimonial */
+.cast--judge {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  background:
+    radial-gradient(520px 160px at 4% 0%, rgba(228, 217, 190, 0.1), transparent 70%),
+    var(--ink-800);
+  border-color: rgba(228, 217, 190, 0.24);
+}
+
+.cast--judge .cast__name {
+  margin: 0;
+}
+
+.cast--judge .cast__tagline {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+}
+
+.cast--judge .cast__model {
+  margin: 0;
+  padding: 0;
+}
+
+.cast--judge .cast__index {
+  position: static;
+  order: 9;
+  margin-left: auto;
+  color: var(--ivory);
+}
+
+@media (max-width: 620px) {
+  .cast--judge {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cast--judge .cast__index {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-4);
+    margin: 0;
+  }
+}

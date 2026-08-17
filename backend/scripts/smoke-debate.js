@@ -53,6 +53,14 @@ function imprimir(type, payload) {
       console.log(`\nConfiança: ${payload.verdict.confidence}%`);
       console.log('Consenso:', payload.verdict.consensusPoints);
       console.log('Discordâncias:', payload.verdict.disagreementPoints);
+      if (payload.verdict.sources?.length) {
+        console.log(
+          `Fontes ${payload.verdict.sourcesFromRegistry ? '(consultadas, juiz não citou)' : '(citadas pelo juiz)'}:`,
+        );
+        for (const fonte of payload.verdict.sources) {
+          console.log(`  [${fonte.n}] ${fonte.source} — ${fonte.url}`);
+        }
+      }
       break;
     case 'debate_completed':
       console.log(`\n${etiqueta} concluído em ${Math.round(payload.durationMs / 1000)}s`);

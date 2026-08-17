@@ -7,13 +7,28 @@
  * o modelo ignora o formato pedido.
  */
 
-/** Rotulos esperados na resposta da rodada 2 (aceitam variacao de acento). */
+/**
+ * Rotulos esperados na resposta da rodada 2.
+ *
+ * Os modelos reais nao seguem o formato ao pe da letra: escrevem
+ * "**POSIÇÃO:**", "### DISCORDÂNCIAS", "- CONCORDÂNCIAS -", as vezes sem os
+ * dois-pontos, e modelos de raciocinio chegam a repetir as instrucoes dentro da
+ * resposta ("Exact labels: CONCORDÂNCIAS:, DISCORDÂNCIAS:, ..."), o que envenenava
+ * o parsing. Por isso os rotulos sao ancorados em INICIO DE LINHA: um rotulo
+ * citado no meio de uma frase deixa de ser confundido com o cabecalho da secao.
+ */
 const ROTULOS_DEBATE = [
-  { key: 'agreements', regex: /CONCORD[ÂA]NCIAS?\s*:?/i },
-  { key: 'disagreements', regex: /DISCORD[ÂA]NCIAS?\s*:?/i },
-  { key: 'position', regex: /POSI[ÇC][ÃA]O\s*:?/i },
-  { key: 'updatedAnswer', regex: /RESPOSTA\s+ATUALIZADA\s*:?/i },
+  { key: 'agreements', fonte: 'CONCORD[ÂA]NCIAS?' },
+  { key: 'disagreements', fonte: 'DISCORD[ÂA]NCIAS?' },
+  { key: 'position', fonte: 'POSI[ÇC][ÃA]O' },
+  { key: 'updatedAnswer', fonte: 'RESPOSTA\\s+ATUALIZADA' },
 ];
+
+/** Monta o regex do rotulo tolerando markdown e ausencia de dois-pontos. */
+function regexDoRotulo(fonte) {
+  //  ^  espaços/marcadores (>, *, #, -, _) · **negrito** · RÓTULO · **  · [:–—-]?
+  return new RegExp(`^[ \\t>*#_\\-]*\\**\\s*(?:${fonte})\\s*\\**\\s*[:\\-–—]?`, 'gim');
+}
 
 /**
  * Extrai as secoes da resposta de debate (rodada 2).
@@ -22,21 +37,25 @@ const ROTULOS_DEBATE = [
  * @returns {{agreements: string, disagreements: string, position: 'MANTENHO'|'REVISO'|null, updatedAnswer: string, parsed: boolean}}
  */
 export function parseDebateResponse(texto = '') {
-  const encontrados = [];
+  /** Todas as ocorrencias de todos os rotulos, em ordem de posicao no texto. */
+  const ocorrencias = [];
 
   for (const rotulo of ROTULOS_DEBATE) {
-    const match = rotulo.regex.exec(texto);
-    if (match) {
-      encontrados.push({
+    const regex = regexDoRotulo(rotulo.fonte);
+    let match;
+    while ((match = regex.exec(texto)) !== null) {
+      ocorrencias.push({
         key: rotulo.key,
         start: match.index,
         contentStart: match.index + match[0].length,
       });
+      // Rotulo pode casar vazio (linha só com o nome): evita loop infinito.
+      if (match.index === regex.lastIndex) regex.lastIndex += 1;
     }
   }
 
   // Sem nenhum rotulo: devolve o texto inteiro como resposta atualizada.
-  if (!encontrados.length) {
+  if (!ocorrencias.length) {
     return {
       agreements: '',
       disagreements: '',
@@ -46,31 +65,62 @@ export function parseDebateResponse(texto = '') {
     };
   }
 
-  encontrados.sort((a, b) => a.start - b.start);
+  ocorrencias.sort((a, b) => a.start - b.start);
 
-  const secoes = {};
-  encontrados.forEach((atual, indice) => {
-    const proximo = encontrados[indice + 1];
-    const fim = proximo ? proximo.start : texto.length;
-    secoes[atual.key] = texto.slice(atual.contentStart, fim).trim();
+  // Conteudo de cada ocorrencia = até o próximo rótulo (qualquer um) ou fim.
+  const comConteudo = ocorrencias.map((atual, indice) => {
+    const fim = ocorrencias[indice + 1]?.start ?? texto.length;
+    return { ...atual, conteudo: texto.slice(atual.contentStart, fim).trim() };
   });
 
-  // Normaliza a posicao para MANTENHO / REVISO.
-  let position = null;
-  const posicaoBruta = (secoes.position || '')
-    .toUpperCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-  if (posicaoBruta.includes('REVIS')) position = 'REVISO';
-  else if (posicaoBruta.includes('MANTEN') || posicaoBruta.includes('MANTE')) position = 'MANTENHO';
+  // Rótulo repetido (eco das instruções + seção real): fica o de maior conteúdo.
+  const melhores = {};
+  for (const ocorrencia of comConteudo) {
+    const atual = melhores[ocorrencia.key];
+    if (!atual || ocorrencia.conteudo.length > atual.conteudo.length) {
+      melhores[ocorrencia.key] = ocorrencia;
+    }
+  }
+
+  const secoes = Object.fromEntries(
+    Object.entries(melhores).map(([chave, ocorrencia]) => [chave, ocorrencia.conteudo]),
+  );
 
   return {
     agreements: secoes.agreements || '',
     disagreements: secoes.disagreements || '',
-    position,
+    position: normalizarPosicao(secoes.position, texto),
     updatedAnswer: secoes.updatedAnswer || texto.trim(),
     parsed: true,
   };
+}
+
+/** Remove acentos e deixa em maiusculas, para comparar sem surpresa. */
+function semAcento(texto = '') {
+  return texto
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Normaliza a posicao para MANTENHO / REVISO.
+ * Se a secao POSICAO nao vier legivel, procura a palavra no texto inteiro
+ * (varios modelos escrevem "mantenho minha resposta" no meio do paragrafo).
+ */
+function normalizarPosicao(secaoPosicao, textoCompleto = '') {
+  const daSecao = semAcento(secaoPosicao ?? '');
+  if (daSecao.includes('REVIS')) return 'REVISO';
+  if (daSecao.includes('MANTEN') || daSecao.includes('MANTE')) return 'MANTENHO';
+
+  // Último recurso: a palavra aparece em algum lugar da resposta.
+  const completo = semAcento(textoCompleto);
+  const temRevisao = /\bREVIS(O|EI|ANDO|AR)\b/.test(completo);
+  const temManutencao = /\bMANTEN(HO|DO)\b|\bMANTE(NHO|M)\b/.test(completo);
+
+  if (temRevisao && !temManutencao) return 'REVISO';
+  if (temManutencao && !temRevisao) return 'MANTENHO';
+  return null;
 }
 
 /** Respostas que significam "nao quero buscar nada". */
@@ -88,9 +138,14 @@ export function extractSearchRequest(texto = '') {
   const match = /^[\s>*-]*BUSCAR\s*:\s*(.+)$/im.exec(texto);
   if (!match) return { query: null, cleaned: texto };
 
-  let consulta = match[1].trim().replace(/^["'«]|["'»]$/g, '').trim();
-  // Alguns modelos encerram a linha com pontuacao ou markdown.
-  consulta = consulta.replace(/\*\*/g, '').replace(/[.;]+$/, '').trim();
+  // Limpa markdown e, nas pontas, aspas e pontuacao em qualquer ordem
+  // (modelos escrevem coisas como: BUSCAR: **"node lts atual".**)
+  const consulta = match[1]
+    .replace(/\*\*/g, '')
+    .trim()
+    .replace(/^[\s"'«“‘]+/, '')
+    .replace(/[\s"'»”’.;,]+$/, '')
+    .trim();
 
   const cleaned = texto.replace(match[0], '').trim();
 
