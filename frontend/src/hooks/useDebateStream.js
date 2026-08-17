@@ -22,6 +22,7 @@ const EVENTOS_SOCKET = [
   'debate_started',
   'round_started',
   'search_note',
+  'web_search',
   'agent_typing',
   'agent_response',
   'agent_debate',
@@ -99,6 +100,27 @@ function aplicarEvento(estado, type, payload) {
         timeline: [
           ...base.timeline,
           { kind: 'system', key: chave, message: payload.message, at: payload.at },
+        ],
+      };
+
+    case 'web_search':
+      return {
+        ...base,
+        timeline: [
+          ...base.timeline,
+          {
+            kind: 'search',
+            key: chave,
+            agentId: payload.agentId ?? null,
+            round: payload.round,
+            shared: Boolean(payload.shared),
+            cached: Boolean(payload.cached),
+            available: Boolean(payload.available),
+            query: payload.query,
+            results: payload.results ?? [],
+            note: payload.note ?? null,
+            at: payload.at,
+          },
         ],
       };
 

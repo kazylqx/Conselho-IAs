@@ -211,6 +211,26 @@ export const debateSettings = {
   /** Minimo de agentes que precisam responder para o debate continuar. */
   minAgentsToContinue: 1,
 
+  /**
+   * Busca na web (Tavily). A chave fica em WEB_SEARCH_API_KEY; se ela nao existir,
+   * a busca simplesmente nao acontece e o debate roda sem fontes externas.
+   *
+   *  - maxPerDebate:  teto de chamadas por debate (protege os creditos).
+   *                   Pior caso hoje: 1 busca compartilhada na rodada 1 +
+   *                   1 por agente na rodada 2.
+   *  - maxResults:    resultados por busca (1 a 10).
+   *  - depth:         "basic" = 1 credito por busca | "advanced" = 2 creditos,
+   *                   com mais contexto por fonte.
+   *  - inDebateRound: deixa cada agente pedir UMA verificacao propria na
+   *                   rodada 2, escrevendo "BUSCAR: <consulta>".
+   */
+  search: {
+    maxPerDebate: 6,
+    maxResults: 5,
+    depth: 'basic',
+    inDebateRound: true,
+  },
+
   /** Quantos caracteres de cada resposta alheia sao mostrados na rodada 2. */
   maxPeerAnswerChars: 2500,
 

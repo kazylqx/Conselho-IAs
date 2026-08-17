@@ -22,6 +22,7 @@ export function FinalVerdict({ verdict, agentsById = {} }) {
   const juiz = verdict.generatedBy;
   const consenso = verdict.consensusPoints ?? [];
   const discordancias = verdict.disagreementPoints ?? [];
+  const fontes = verdict.sources ?? [];
   const falharam = (verdict.failedAgents ?? []).map(
     (id) => agentsById[id]?.name ?? id,
   );
@@ -82,6 +83,36 @@ export function FinalVerdict({ verdict, agentsById = {} }) {
           )}
         </div>
       </div>
+
+      {fontes.length > 0 && (
+        <section className="verdict__sources">
+          <h3>
+            <span aria-hidden="true">🔗</span>{' '}
+            {verdict.sourcesFromRegistry
+              ? 'Fontes consultadas no debate'
+              : 'Fontes usadas no veredito'}
+          </h3>
+          <ul>
+            {fontes.map((fonte) => (
+              <li key={fonte.url}>
+                <a href={fonte.url} target="_blank" rel="noopener noreferrer">
+                  <span className="verdict__source-number">[{fonte.n}]</span> {fonte.title}
+                </a>
+                <span className="verdict__source-meta">
+                  {fonte.source}
+                  {fonte.publishedAt ? ` · ${fonte.publishedAt}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {verdict.sourcesFromRegistry && (
+            <p className="verdict__source-note">
+              O juiz não indicou quais fontes sustentam a resposta; estas são todas as que o
+              conselho consultou.
+            </p>
+          )}
+        </section>
+      )}
 
       {verdict.caveats && (
         <p className="verdict__caveats">

@@ -7,9 +7,9 @@ O debate acontece em três rodadas:
 
 | Rodada | O que acontece | Evento WebSocket |
 | ------ | -------------- | ---------------- |
-| 1 | Cada agente responde sozinho, sem ver os outros (pode consultar `webSearch()` se a pergunta depender de dados atuais) | `agent_response` |
-| 2 | Cada agente lê as respostas alheias, aponta concordâncias, contesta discordâncias e mantém ou revisa a própria posição | `agent_debate` |
-| 3 | Um agente juiz lê todo o histórico e emite o veredito: resposta final, confiança de 0 a 100%, consenso e divergências | `final_verdict` |
+| 1 | Cada agente responde sozinho, sem ver os outros. Se a pergunta depender de dado atual, todos recebem as mesmas fontes de uma busca na web (Tavily) | `agent_response` |
+| 2 | Cada agente lê as respostas alheias, aponta concordâncias, contesta discordâncias e mantém ou revisa a própria posição. Pode pedir **uma** busca na web para checar o que o outro afirmou | `agent_debate`, `web_search` |
+| 3 | Um agente juiz lê todo o histórico e emite o veredito: resposta final, confiança de 0 a 100%, consenso, divergências e **as fontes usadas** | `final_verdict` |
 
 Tudo é transmitido mensagem por mensagem pelo Socket.IO, com indicador de "digitando…" por
 agente, barra de confiança animada e histórico persistido para revisitar debates antigos.
@@ -47,7 +47,7 @@ instalar, atualizar e quebrar no deploy.
       confidence.js       # confiança provisória (heurística) durante o debate
       orchestrator.js     # as 3 rodadas + tolerância a falhas
       debateRunner.js     # cria o debate e roda em segundo plano
-      webSearch.js        # CONTRATO da busca web (não implementado de propósito)
+      webSearch.js        # busca na web via Tavily (+ heurística de "precisa de dado atual?")
     /routes
       index.js            # /api/health, /api/agents
       debate.routes.js    # POST /debate, GET /debate/:id, DELETE /debate/:id, GET /history
@@ -124,6 +124,7 @@ VITE_BACKEND_URL=http://localhost:3000
 ```bash
 cd backend
 npm run providers:check                       # valida GROQ / GEMINI / OPENROUTER, um agente por vez
+npm run busca:check                           # valida a chave da Tavily com 1 busca real
 npm run debate:teste                          # debate completo em modo simulado
 npm run debate:teste -- --real "sua pergunta" # debate usando as APIs reais do .env
 ```
@@ -164,15 +165,20 @@ GEMINI_API_KEY=
 OPENROUTER_API_KEY=
 FRONTEND_URL=http://localhost:5173
 MOCK_AI=false
+
+# opcional, mas é o que dá dados atuais ao conselho
+WEB_SEARCH_PROVIDER=tavily
+WEB_SEARCH_API_KEY=
 ```
 
-Onde pegar cada chave (as três são gratuitas e o cadastro leva ~1 minuto):
+Onde pegar cada chave (todas gratuitas, cadastro de ~1 minuto):
 
-| Chave | Link |
-| ----- | ---- |
-| `GROQ_API_KEY` | <https://console.groq.com/keys> |
-| `GEMINI_API_KEY` | <https://aistudio.google.com/app/apikey> |
-| `OPENROUTER_API_KEY` | <https://openrouter.ai/keys> |
+| Chave | Link | Obrigatória? |
+| ----- | ---- | ------------ |
+| `GROQ_API_KEY` | <https://console.groq.com/keys> | sim (2 debatedores) |
+| `GEMINI_API_KEY` | <https://aistudio.google.com/app/apikey> | sim (1 debatedor) |
+| `OPENROUTER_API_KEY` | <https://openrouter.ai/keys> | sim (juiz) |
+| `WEB_SEARCH_API_KEY` | <https://app.tavily.com> | não — sem ela o debate roda sem busca na web |
 
 O `.env` está no `.gitignore` (junto com `.env.*`), então ele nunca vai para o repositório.
 Quer testar a interface antes de ter as chaves? Use `MOCK_AI=true` que o fluxo inteiro funciona
@@ -187,6 +193,8 @@ zip do deploy:
 GROQ_API_KEY=...
 GEMINI_API_KEY=...
 OPENROUTER_API_KEY=...
+WEB_SEARCH_PROVIDER=tavily
+WEB_SEARCH_API_KEY=tvly-...
 FRONTEND_URL=https://seu-site.netlify.app
 PORT=80
 MOCK_AI=false
@@ -308,9 +316,12 @@ Outros ajustes em `debateSettings`, no mesmo arquivo:
 Cliente envia: `join_debate <debateId>` (e recebe `debate_snapshot` com tudo que já aconteceu),
 `leave_debate <debateId>`.
 
-Servidor envia: `debate_started`, `round_started`, `search_note`, `agent_typing`,
+Servidor envia: `debate_started`, `round_started`, `search_note`, `web_search`, `agent_typing`,
 `agent_response`, `agent_debate`, `agent_error`, `confidence_update`, `final_verdict`,
 `debate_completed`, `debate_error`, `debate_not_found`.
+
+`web_search` traz `{ agentId, round, shared, cached, query, results: [{ n, title, url, source,
+publishedAt }] }` — `agentId: null` significa a busca compartilhada da rodada 1.
 
 Todo evento persistido tem um `seq` incremental — é isso que permite recarregar a página no meio
 do debate sem duplicar mensagens.
@@ -348,6 +359,8 @@ do debate sem duplicar mensagens.
    GROQ_API_KEY=...
    GEMINI_API_KEY=...
    OPENROUTER_API_KEY=...
+   WEB_SEARCH_PROVIDER=tavily
+   WEB_SEARCH_API_KEY=tvly-...
    FRONTEND_URL=https://seu-site.netlify.app
    PORT=80
    MOCK_AI=false
@@ -390,32 +403,86 @@ nesse caso passe a URL do backend na hora do build (`VITE_BACKEND_URL=... npm ru
 
 ---
 
-## Ativando a busca na web
+## Busca na web (Tavily) — dados atuais no debate
 
-`backend/src/agents/webSearch.js` tem só o contrato:
+Implementada em `backend/src/agents/webSearch.js`. Sem ela o conselho responde apenas com o
+conhecimento treinado dos modelos; com ela, as respostas passam a ter fonte verificável.
+
+### Ligando
+
+1. Pegue a chave gratuita em <https://app.tavily.com> (1.000 créditos/mês, sem cartão).
+2. No `backend/.env`:
+
+   ```env
+   WEB_SEARCH_PROVIDER=tavily
+   WEB_SEARCH_API_KEY=tvly-...
+   WEB_SEARCH_DEPTH=basic          # basic = 1 crédito | advanced = 2 créditos
+   WEB_SEARCH_TIMEOUT_MS=15000
+   ```
+
+3. Confirme com uma busca real (custa 1 crédito):
+
+   ```bash
+   cd backend
+   npm run busca:check
+   npm run busca:check -- "cotação do dólar hoje"
+   ```
+
+Se `WEB_SEARCH_API_KEY` ficar vazia, nada quebra: o debate roda sem fontes e a interface avisa
+"a busca na web está desligada".
+
+### Como a busca entra no debate
+
+**Rodada 1 — busca compartilhada.** Se `needsFreshData(question)` detectar que a pergunta
+depende de dado atual (palavras como "hoje", "atual", "preço", "última versão", ano recente),
+o backend faz **uma** busca e entrega as mesmas fontes a todos os agentes com
+`canUseWebSearch: true`. Uma busca, um crédito, todos com a mesma base — a divergência que
+sobrar é de interpretação, não de fonte.
+
+**Rodada 2 — verificação por agente.** Cada agente pode pedir **uma** checagem própria
+escrevendo `BUSCAR: <consulta>` na primeira linha. O backend executa, devolve o resultado e
+chama o modelo de novo com os dados em mão. É isso que permite contestar o colega com evidência
+nova em vez de só opinião.
+
+**Rodada 3 — fontes no veredito.** Todas as fontes do debate entram em um registro numerado
+(`[1]`, `[2]`…) compartilhado por agentes, juiz e interface. O juiz devolve `fontes_usadas: [1, 3]`
+no JSON, o backend resolve esses números nas fontes reais (número inventado é descartado) e a UI
+mostra os links no cartão da Resposta Final. Se o juiz não citar nada e houver busca, a UI mostra
+as fontes consultadas com o rótulo correspondente.
+
+Cada busca aparece na tela como um cartão 🔎 com a consulta e os links numerados, tanto na
+compartilhada quanto nas verificações de cada agente.
+
+### Controle de gasto
+
+Configurável em `debateSettings.search`, em `backend/src/agents.config.js`:
 
 ```js
-export async function webSearch(query, options = {}) {
-  return { implemented: false, query, provider: null, results: [], note: '...' };
+search: {
+  maxPerDebate: 6,      // teto de chamadas por debate
+  maxResults: 5,        // resultados por busca
+  depth: 'basic',       // 'basic' = 1 crédito | 'advanced' = 2
+  inDebateRound: true,  // permite o "BUSCAR:" na rodada 2
 }
 ```
 
-Para ligar de verdade, troque o corpo da função por uma chamada ao provedor que você preferir
-(Tavily, Brave Search, Serper, SerpAPI, Exa…) devolvendo o mesmo formato:
+Além do teto, há cache por consulta dentro do debate: se dois agentes pedirem a mesma coisa, a
+segunda vem do cache (o evento aparece com a marca `reaproveitada` e não gasta crédito). Pior
+caso com os 3 debatedores padrão: 1 busca na rodada 1 + 3 na rodada 2 = **4 créditos por debate**;
+na prática costuma ser menos. Para desligar só a rodada 2, use `inDebateRound: false`.
+
+### Trocando de provedor
+
+O contrato de retorno é o único acoplamento:
 
 ```js
-return {
-  implemented: true,
-  query,
-  provider: 'tavily',
-  results: [{ title, url, snippet, publishedAt, source }],
-};
+{ implemented: true, query, provider: 'tavily', results: [{ title, url, snippet, publishedAt, source }] }
 ```
 
-O resto já está pronto: o orquestrador chama `webSearch()` para os agentes com
-`canUseWebSearch: true` quando `needsFreshData(question)` detecta que a pergunta depende de
-dados atuais, formata os resultados no prompt e avisa na interface quando a busca não está
-disponível.
+Para usar Brave, Serper, Exa ou SearXNG, troque só o corpo do `fetch` em `webSearch.js`
+mantendo esse formato. E qualquer falha (chave inválida, 429, timeout, rede) deve continuar
+voltando como `{ implemented: false, results: [] }` — é assim que o orquestrador segue o debate
+sem quebrar.
 
 ---
 
@@ -431,9 +498,12 @@ disponível.
   - rate limit em memória: 120 requisições/min por IP na API e 10/min para criar debates.
 - `MAX_CONCURRENT_DEBATES` (padrão 3) limita quantos debates rodam ao mesmo tempo, o que segura
   o consumo das cotas gratuitas.
-- Cada debate faz `2 × nº de debatedores + 1` chamadas de modelo. Com os 3 debatedores padrão são
-  7 chamadas por debate — dentro das camadas gratuitas para uso pessoal, mas as cotas da Groq e
-  do OpenRouter são por minuto/dia, então vale evitar deixar o link circulando sem `API_TOKEN`.
+- Cada debate faz `2 × nº de debatedores + 1` chamadas de modelo (7 com os 3 debatedores padrão),
+  mais 1 chamada extra por agente que pedir verificação na rodada 2, e até 4 buscas na Tavily.
+  Tudo dentro das camadas gratuitas para uso pessoal, mas as cotas da Groq e do OpenRouter são
+  por minuto/dia e a da Tavily é por mês — vale evitar deixar o link circulando sem `API_TOKEN`.
+- As URLs que a Tavily devolve são conteúdo de terceiros: os links do veredito abrem com
+  `rel="noopener noreferrer"` e nada do que volta da busca é executado, apenas exibido como texto.
 
 ---
 
@@ -451,6 +521,15 @@ disponível.
 - Endpoints dos 3 provedores, com chave falsa de propósito, para validar URL e formato da
   requisição: Groq respondeu `401 Invalid API Key`, Gemini `400 API key not valid` e OpenRouter
   `401` — ou seja, as três requisições chegam corretamente e só a credencial é recusada.
+- Busca na web (Tavily) com a API dublada: debate inteiro com 1 busca compartilhada na rodada 1,
+  3 pedidos de verificação na rodada 2 resolvidos com **2 chamadas reais** (as outras vieram do
+  cache), `search_depth: basic` e `max_results: 5` no corpo enviado, fontes numeradas [1]/[2]
+  chegando aos prompts e o juiz citando `fontes_usadas: [1]` — que a UI renderizou como link.
+- Erros da busca: sem chave, chave inválida no endpoint real (HTTP 401) e timeout — os três
+  voltam como `{ implemented: false, results: [] }` e o debate segue até o veredito.
+- Componentes novos renderizados fora do navegador: cartão de busca com resultados, cartão de
+  busca com erro, veredito com fontes citadas, veredito com fontes do registro e veredito sem
+  fonte (seção escondida).
 
 Ainda **não** testado (depende das suas chaves): a resposta real dos modelos e, portanto, o
 parsing dos formatos que cada um devolve nas rodadas 2 e 3. O código tem fallback para os dois

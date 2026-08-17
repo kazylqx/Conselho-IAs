@@ -12,6 +12,7 @@ import { ChatBubble, AgentErrorBubble } from './ChatBubble.jsx';
 import { RoundDivider } from './RoundDivider.jsx';
 import { TypingIndicator } from './TypingIndicator.jsx';
 import { FinalVerdict } from './FinalVerdict.jsx';
+import { SearchCard } from './SearchCard.jsx';
 import './DebateRoom.css';
 
 /** Distância do fim (px) em que ainda consideramos que o usuário está "no fim". */
@@ -72,6 +73,16 @@ export function DebateRoom({
                 <p className="debate-room__system" key={item.key}>
                   {item.message}
                 </p>
+              );
+            }
+
+            if (item.kind === 'search') {
+              return (
+                <SearchCard
+                  key={item.key}
+                  agent={item.agentId ? agentsById[item.agentId] : null}
+                  item={item}
+                />
               );
             }
 

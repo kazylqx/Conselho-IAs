@@ -255,6 +255,9 @@ async function callMock({ config, prompt }) {
 
   const isDebateRound = /RESPOSTAS DOS OUTROS/i.test(prompt);
   const isJudgeRound = /VEREDITO|juiz|juíza/i.test(prompt) && /JSON/i.test(prompt);
+  const temFontes = /FONTES DA WEB/i.test(prompt);
+  const podePedirBusca = /BUSCAR: <consulta/i.test(prompt);
+  const jaBuscou = /VERIFICAÇÃO QUE VOCÊ PEDIU/i.test(prompt);
 
   if (isJudgeRound) {
     return JSON.stringify({
@@ -267,17 +270,24 @@ async function callMock({ config, prompt }) {
         'O fluxo de rodadas e eventos do WebSocket está funcionando.',
       ],
       pontos_de_discordancia: ['Nenhuma discordância real: as respostas são simuladas.'],
+      // Em modo simulado citamos a primeira fonte só para exercitar a UI.
+      fontes_usadas: temFontes ? [1] : [],
       ressalvas: 'Nenhuma API de IA foi consultada nesta execução.',
     });
   }
 
   if (isDebateRound) {
+    // Exercita o caminho "agente pede verificação na web" sem gastar modelo real.
+    if (podePedirBusca && !jaBuscou) {
+      return 'BUSCAR: dados atuais para checar a afirmação do outro conselheiro';
+    }
+
     return [
       'CONCORDÂNCIAS: as respostas simuladas apontam para a mesma direção geral.',
       'DISCORDÂNCIAS: nenhuma.',
       'POSIÇÃO: MANTENHO',
       `RESPOSTA ATUALIZADA: resposta simulada de ${config.name} na rodada de debate ` +
-        '(modo demonstração ativo).',
+        `(modo demonstração ativo)${jaBuscou ? ', já considerando a verificação [1]' : ''}.`,
     ].join('\n');
   }
 

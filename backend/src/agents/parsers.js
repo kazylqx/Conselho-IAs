@@ -73,6 +73,33 @@ export function parseDebateResponse(texto = '') {
   };
 }
 
+/** Respostas que significam "nao quero buscar nada". */
+const RECUSAS_DE_BUSCA = /^(nenhuma?|nao|não|n\/a|-|nada|nenhuma busca)\.?$/i;
+
+/**
+ * Detecta o pedido de busca do agente na rodada 2 ("BUSCAR: <consulta>").
+ *
+ * @param {string} texto resposta bruta do modelo
+ * @returns {{query: string|null, cleaned: string}}
+ *          query = consulta pedida (null se nao pediu);
+ *          cleaned = texto sem a linha do pedido
+ */
+export function extractSearchRequest(texto = '') {
+  const match = /^[\s>*-]*BUSCAR\s*:\s*(.+)$/im.exec(texto);
+  if (!match) return { query: null, cleaned: texto };
+
+  let consulta = match[1].trim().replace(/^["'«]|["'»]$/g, '').trim();
+  // Alguns modelos encerram a linha com pontuacao ou markdown.
+  consulta = consulta.replace(/\*\*/g, '').replace(/[.;]+$/, '').trim();
+
+  const cleaned = texto.replace(match[0], '').trim();
+
+  if (!consulta || RECUSAS_DE_BUSCA.test(consulta)) return { query: null, cleaned };
+
+  // Consulta gigante costuma ser o modelo confundindo o formato: corta.
+  return { query: consulta.slice(0, 200), cleaned };
+}
+
 /**
  * true quando a secao de discordancias equivale a "nenhuma".
  * Regra: precisa comecar com uma negacao E ser curta — uma negacao seguida de
@@ -144,10 +171,52 @@ export function clampConfianca(valor, padrao = 50) {
 }
 
 /**
+ * Normaliza a lista de fontes citadas pelo juiz.
+ * Aceita numeros ([1, 2]), strings ("[1]", "1", "https://..."), ou objetos
+ * ({ n: 1 } / { url: '...' }) — modelos variam muito nesse campo.
+ *
+ * @param {*} valor
+ * @returns {Array<number|string>} numeros de fonte e/ou URLs
+ */
+function normalizarRefsDeFonte(valor) {
+  const bruto = Array.isArray(valor) ? valor : valor == null ? [] : [valor];
+  const refs = [];
+
+  for (const item of bruto) {
+    if (typeof item === 'number' && Number.isFinite(item)) {
+      refs.push(Math.trunc(item));
+      continue;
+    }
+
+    if (item && typeof item === 'object') {
+      if (item.url) refs.push(String(item.url).trim());
+      else if (item.n != null) refs.push(Math.trunc(Number(item.n)));
+      continue;
+    }
+
+    const texto = String(item ?? '').trim();
+    if (!texto) continue;
+
+    const url = /https?:\/\/\S+/i.exec(texto);
+    if (url) {
+      refs.push(url[0].replace(/[),.]+$/, ''));
+      continue;
+    }
+
+    // "[3]" ou "3" ou "fonte 3"
+    const numero = /(\d{1,3})/.exec(texto);
+    if (numero) refs.push(Number.parseInt(numero[1], 10));
+  }
+
+  // Remove duplicatas mantendo a ordem.
+  return [...new Set(refs)];
+}
+
+/**
  * Interpreta o veredito do juiz.
  *
  * @param {string} texto resposta bruta do juiz
- * @returns {{finalAnswer: string, confidence: number, consensusPoints: string[], disagreementPoints: string[], caveats: string, parsed: boolean, rawText: string}}
+ * @returns {{finalAnswer: string, confidence: number, consensusPoints: string[], disagreementPoints: string[], sourceRefs: Array<number|string>, caveats: string, parsed: boolean, rawText: string}}
  */
 export function parseJudgeVerdict(texto = '') {
   const dados = extrairJson(texto);
@@ -160,6 +229,8 @@ export function parseJudgeVerdict(texto = '') {
       confidence: confiancaNoTexto ? clampConfianca(confiancaNoTexto[1], 50) : 50,
       consensusPoints: [],
       disagreementPoints: [],
+      // Última tentativa: pega "[1]", "[2]" citados no texto solto.
+      sourceRefs: normalizarRefsDeFonte((texto.match(/\[(\d{1,3})\]/g) ?? []).map((m) => m)),
       caveats: 'O veredito não veio no formato JSON esperado; o texto foi usado como está.',
       parsed: false,
       rawText: texto,
@@ -181,11 +252,20 @@ export function parseJudgeVerdict(texto = '') {
     dados.disagreement_points ??
     [];
 
+  const fontes =
+    dados.fontes_usadas ??
+    dados.fontesUsadas ??
+    dados.fontes ??
+    dados.sources ??
+    dados.sources_used ??
+    [];
+
   return {
     finalAnswer: String(finalAnswer).trim() || 'O juiz não retornou uma resposta final.',
     confidence: clampConfianca(dados.confianca ?? dados.confiança ?? dados.confidence, 50),
     consensusPoints: normalizarLista(consenso),
     disagreementPoints: normalizarLista(discordancia),
+    sourceRefs: normalizarRefsDeFonte(fontes),
     caveats: String(dados.ressalvas ?? dados.caveats ?? '').trim(),
     parsed: true,
     rawText: texto,
@@ -200,8 +280,14 @@ export function parseJudgeVerdict(texto = '') {
  * @param {Array<{agent: object, text: string, structured?: object}>} params.finalAnswers
  * @param {number} params.confidence confianca heuristica calculada pelo backend
  * @param {string} [params.reason] motivo da falha do juiz
+ * @param {Array} [params.sources] fontes coletadas no debate (entram como "consultadas")
  */
-export function buildFallbackVerdict({ finalAnswers = [], confidence = 30, reason = '' }) {
+export function buildFallbackVerdict({
+  finalAnswers = [],
+  confidence = 30,
+  reason = '',
+  sources = [],
+}) {
   const consenso = [];
   const discordancias = [];
 
@@ -225,6 +311,9 @@ export function buildFallbackVerdict({ finalAnswers = [], confidence = 30, reaso
     confidence: Math.min(confidence, 45),
     consensusPoints: consenso.slice(0, 5),
     disagreementPoints: discordancias.slice(0, 5),
+    // Sem juiz não há citação: mostramos tudo que o debate consultou.
+    sources: sources.slice(0, 6),
+    sourcesFromRegistry: sources.length > 0,
     caveats:
       'Veredito gerado automaticamente pelo backend porque o agente juiz falhou. ' +
       'Confiança reduzida de propósito.',

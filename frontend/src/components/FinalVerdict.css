@@ -132,6 +132,62 @@
   border-color: rgba(251, 191, 36, 0.22);
 }
 
+.verdict__sources {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius);
+  background: var(--bg-elev-2);
+  border: 1px solid rgba(124, 156, 255, 0.22);
+}
+
+.verdict__sources h3 {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.verdict__sources ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.verdict__sources a {
+  display: block;
+  font-size: 0.89rem;
+  color: var(--text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.verdict__sources a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.verdict__source-number {
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict__source-meta {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.verdict__source-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.76rem;
+  color: var(--text-faint);
+}
+
 .verdict__caveats {
   margin: 0.9rem 0 0;
   font-size: 0.86rem;

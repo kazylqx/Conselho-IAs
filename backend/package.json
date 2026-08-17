@@ -12,7 +12,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "debate:teste": "node scripts/smoke-debate.js",
-    "providers:check": "node scripts/check-providers.js"
+    "providers:check": "node scripts/check-providers.js",
+    "busca:check": "node scripts/check-search.js"
   },
   "dependencies": {
     "cors": "2.8.5",
