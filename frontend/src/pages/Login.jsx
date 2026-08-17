@@ -7,7 +7,7 @@
  */
 
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthProvider.jsx';
 import './Login.css';
 
@@ -24,7 +24,8 @@ function GoogleIcon() {
 }
 
 export default function Login() {
-  const { entrarComGoogle, entrarComEmail, criarConta, recuperarSenha, habilitado } = useAuth();
+  const { entrarComGoogle, entrarComEmail, criarConta, recuperarSenha, habilitado, autenticado } =
+    useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const destino = location.state?.de ?? '/';
@@ -73,6 +74,9 @@ export default function Login() {
       setErro(falha.message);
     }
   }
+
+  // Quem já está logado não tem o que fazer aqui (voltar pelo histórico, por exemplo).
+  if (autenticado) return <Navigate to={destino} replace />;
 
   if (!habilitado) {
     return (
