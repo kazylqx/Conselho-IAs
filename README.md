@@ -390,30 +390,51 @@ do debate sem duplicar mensagens.
 
 ## Deploy do backend na SquareCloud
 
-1. O arquivo `backend/squarecloud.config` já está pronto:
+### Deploy automático pelo GitHub (o caminho usado hoje)
 
-   ```
-   DISPLAY_NAME=Conselho de IAs API
-   MAIN=src/server.js
-   RUNTIME=nodejs
-   VERSION=recommended
-   MEMORY=512
-   AUTORESTART=true
-   START=npm start
-   SUBDOMAIN=conselho-de-ias
-   ```
+Na aba **Deploys** do app, com a integração do GitHub ligada em *Automático*, todo push na `main`
+dispara um deploy.
 
-   Troque `SUBDOMAIN` pelo subdomínio que você quiser (vira
-   `https://<subdominio>.squareweb.app`).
+> **Detalhe que já causou problema aqui:** a integração envia o **repositório inteiro** — não
+> existe opção de escolher a subpasta `backend`. Por isso a **raiz** do repositório é que precisa
+> ser um app válido, e é o `squarecloud.config` da raiz que vale:
+>
+> ```
+> MAIN=backend/src/server.js
+> RUNTIME=nodejs
+> VERSION=recommended
+> MEMORY=512
+> AUTORESTART=true
+> START=npm start
+> SUBDOMAIN=conselho-de-ias
+> ```
+>
+> O `package.json` da raiz declara as dependências do backend (o `npm install` roda na raiz do
+> app) e o `start` executa `node backend/src/server.js`. O Node resolve os imports de
+> `backend/src` subindo os diretórios, então os pacotes instalados na raiz atendem o backend.
+>
+> Se você criou o app antes com um zip da pasta `backend`, o container ainda tem um `src/` antigo
+> na raiz: os deploys do GitHub davam "Success", o app reiniciava e continuava rodando o código
+> velho. Com a config da raiz apontando para `backend/src/server.js`, isso deixa de acontecer —
+> mas vale limpar os arquivos órfãos (`src/` na raiz do container) pelo painel uma vez.
 
-2. Compacte **o conteúdo da pasta `backend`** em um `.zip` (o `squarecloud.config` e o
-   `package.json` precisam ficar na raiz do zip). Não inclua `node_modules` nem `.env`.
+Para conferir se o deploy realmente entrou em vigor, não confie no restart: compare os modelos.
 
-3. No painel da SquareCloud, faça o upload marcando a opção de **publicação web / website** e
-   defina o subdomínio.
+```bash
+curl https://<subdominio>.squareweb.app/api/agents
+```
 
-4. Configure as variáveis de ambiente no painel (aba de variáveis do app) — **as chaves ficam
-   aqui, não no código nem no zip**:
+### Alternativa: zip manual (sem GitHub)
+
+Compacte **o conteúdo da pasta `backend`** (o `backend/squarecloud.config`, que aponta para
+`src/server.js`, e o `package.json` na raiz do zip), sem `node_modules`, sem `.env` e sem `data/`.
+No Windows, gere o zip pela API do .NET e não com `Compress-Archive`: o cmdlet grava os caminhos
+com barra invertida e o Linux da SquareCloud extrai tudo como arquivo solto, fazendo o `MAIN` não
+ser encontrado.
+
+### Variáveis de ambiente (nos dois casos)
+
+Configure no painel do app — **as chaves ficam aqui, nunca no código nem no repositório**:
 
    ```
    GROQ_API_KEY=...
@@ -428,10 +449,12 @@ do debate sem duplicar mensagens.
 
    > **`PORT=80` é obrigatório**: o balanceador da SquareCloud roteia o tráfego web pela porta 80.
 
-5. Reinicie o app e confira `https://<subdominio>.squareweb.app/api/health`.
+Depois confira `https://<subdominio>.squareweb.app/api/health` (deve trazer `mockMode: false` e
+`webSearchImplemented: true`).
 
-O histórico fica em `backend/data/debates.json`, dentro do container. Ele sobrevive a restarts,
-mas some se você apagar/recriar a aplicação — baixe o arquivo pelo painel se quiser guardar.
+O histórico fica em `data/debates.json` **relativo ao diretório de execução** — na SquareCloud,
+a raiz do app. Ele sobrevive a restarts e a deploys, mas some se você apagar/recriar a aplicação;
+baixe o arquivo pelo painel se quiser guardar.
 
 ---
 
