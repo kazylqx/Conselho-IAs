@@ -285,13 +285,22 @@ export async function webSearch(query, options = {}) {
  * @param {string} [options.titulo]
  * @returns {string} bloco pronto (string vazia se nao houver fonte)
  */
-export function formatSourcesForPrompt(sources = [], { titulo = 'FONTES DA WEB' } = {}) {
+export function formatSourcesForPrompt(
+  sources = [],
+  { titulo = 'FONTES DA WEB', limit = null, maxSnippet = null } = {},
+) {
   if (!sources.length) return '';
 
-  const linhas = sources.map((item) => {
+  const selecionadas = limit ? sources.slice(0, limit) : sources;
+
+  const linhas = selecionadas.map((item) => {
     const data = item.publishedAt ? ` · publicado em ${item.publishedAt}` : '';
     const dominio = item.source ? ` · ${item.source}` : '';
-    return `[${item.n}] ${item.title}${dominio}${data}\n    ${item.url}\n    ${item.snippet}`;
+    const trecho =
+      maxSnippet && item.snippet.length > maxSnippet
+        ? `${item.snippet.slice(0, maxSnippet).trimEnd()}…`
+        : item.snippet;
+    return `[${item.n}] ${item.title}${dominio}${data}\n    ${item.url}\n    ${trecho}`;
   });
 
   return [

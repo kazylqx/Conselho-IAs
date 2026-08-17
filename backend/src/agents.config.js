@@ -104,8 +104,9 @@ export const agents = [
     ].join(' '),
     temperature: 0.4,
     // gpt-oss eh modelo de raciocinio: parte dos tokens vai para o "pensar",
-    // entao o orcamento aqui eh maior que o dos outros agentes.
-    maxTokens: 2000,
+    // entao o orcamento aqui eh maior que o dos outros agentes — mas nao alto
+    // demais, porque o teto pedido conta no limite de tokens por minuto da Groq.
+    maxTokens: 1600,
     timeoutMs: 60000,
     retries: 1,
     canUseWebSearch: true,
@@ -253,10 +254,20 @@ export const debateSettings = {
     maxResults: 5,
     depth: 'basic',
     inDebateRound: true,
+    /**
+     * Quantas fontes entram no prompt da rodada 2 (com trecho encurtado).
+     * Mandar as 5+ fontes inteiras junto com as respostas dos colegas estoura o
+     * limite de tokens por minuto da camada gratuita da Groq (8k TPM).
+     */
+    maxSourcesInDebateRound: 4,
   },
 
-  /** Quantos caracteres de cada resposta alheia sao mostrados na rodada 2. */
-  maxPeerAnswerChars: 2500,
+  /**
+   * Quantos caracteres de cada resposta alheia sao mostrados na rodada 2.
+   * Valor conservador de proposito: e o que mais pesa no prompt da rodada 2 e o
+   * que empurra os agentes da Groq contra o limite de tokens por minuto.
+   */
+  maxPeerAnswerChars: 1400,
 
   /** Idioma das respostas dos agentes. */
   language: 'português do Brasil',

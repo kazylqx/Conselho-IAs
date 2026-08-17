@@ -12,12 +12,17 @@
 
 /** Erro de provedor com codigo legivel, usado para sinalizar falha na UI. */
 export class ProviderError extends Error {
-  constructor(message, { code = 'provider_error', status = null, retryable = false } = {}) {
+  constructor(
+    message,
+    { code = 'provider_error', status = null, retryable = false, retryAfterMs = null } = {},
+  ) {
     super(message);
     this.name = 'ProviderError';
     this.code = code;
     this.status = status;
     this.retryable = retryable;
+    /** Espera sugerida pelo provedor antes da proxima tentativa (ms). */
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -95,6 +100,31 @@ async function parseBody(response) {
   }
 }
 
+/**
+ * Descobre quanto esperar antes de tentar de novo.
+ * Camadas gratuitas dizem o tempo exato: a Groq responde
+ * "Please try again in 20.52s" e alguns provedores mandam o header Retry-After.
+ * Sem isso, um backoff de 800ms bate na parede de novo na hora.
+ *
+ * @returns {number|null} espera em ms
+ */
+function extrairEsperaSugerida(response, body) {
+  const header = response.headers?.get?.('retry-after');
+  if (header) {
+    const segundos = Number.parseFloat(header);
+    if (Number.isFinite(segundos)) return Math.ceil(segundos * 1000);
+  }
+
+  const texto = `${body?.raw ?? ''} ${JSON.stringify(body?.json ?? '')}`;
+  const match = /try again in\s*([\d.]+)\s*(ms|s)\b/i.exec(texto);
+  if (match) {
+    const valor = Number.parseFloat(match[1]);
+    if (Number.isFinite(valor)) return Math.ceil(match[2].toLowerCase() === 'ms' ? valor : valor * 1000);
+  }
+
+  return null;
+}
+
 /** Transforma resposta HTTP de erro em ProviderError (marcando o que da para repetir). */
 function httpError(provider, response, body) {
   const detail =
@@ -109,6 +139,7 @@ function httpError(provider, response, body) {
     code: retryable ? 'temporarily_unavailable' : 'api_error',
     status: response.status,
     retryable,
+    retryAfterMs: retryable ? extrairEsperaSugerida(response, body) : null,
   });
 }
 
@@ -399,6 +430,8 @@ export async function callModel({ config, system, prompt }) {
   }
 
   const maxAttempts = 1 + (config.retries ?? 1);
+  /** Teto da espera entre tentativas: limite de tokens por minuto costuma pedir ~20s. */
+  const ESPERA_MAXIMA_MS = 32000;
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -415,8 +448,23 @@ export async function callModel({ config, system, prompt }) {
       lastError = error;
       const retryable = error instanceof ProviderError && error.retryable;
       if (!retryable || attempt === maxAttempts) break;
-      // Backoff progressivo simples: 800ms, 1600ms, ...
-      await sleep(800 * attempt);
+
+      // Obedece o tempo que o provedor pediu (429 de tokens por minuto costuma
+      // pedir 10-25s); sem sugestão, cai no backoff progressivo.
+      const sugerida = error.retryAfterMs;
+      // Jitter generoso: dois agentes no mesmo provedor batendo no limite juntos
+      // não devem voltar exatamente no mesmo instante e estourar de novo.
+      const jitter = 250 + Math.round(Math.random() * (sugerida ? 2500 : 400));
+      const espera = Math.min(ESPERA_MAXIMA_MS, (sugerida ?? 800 * attempt) + jitter);
+
+      if (sugerida) {
+        console.warn(
+          `[${config.name ?? config.model}] limite do provedor: aguardando ` +
+            `${(espera / 1000).toFixed(1)}s antes de tentar de novo`,
+        );
+      }
+
+      await sleep(espera);
     }
   }
 

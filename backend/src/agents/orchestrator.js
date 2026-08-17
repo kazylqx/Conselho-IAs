@@ -356,8 +356,13 @@ export async function runDebate({ debateId, question, emit }) {
           }));
 
         // Fontes já coletadas (rodada 1 + buscas de outros agentes que já rodaram).
+        // Na rodada 2 o prompt já carrega a pergunta, a própria resposta e a dos
+        // colegas: cortamos as fontes para não estourar o limite de tokens por
+        // minuto das camadas gratuitas (a Groq libera 8k TPM).
         const blocoFontes = formatSourcesForPrompt(todasAsFontes(), {
           titulo: 'FONTES DA WEB JÁ COLETADAS NESTE DEBATE',
+          limit: configBusca.maxSourcesInDebateRound ?? 4,
+          maxSnippet: 260,
         });
 
         const podePedirBusca =
